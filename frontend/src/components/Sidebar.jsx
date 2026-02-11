@@ -231,11 +231,12 @@ const Sidebar = ({
                       <span className="flex-1 text-sm text-neutral-200 truncate py-2 px-3 min-w-0">
                         {chat.title}
                       </span>
-                      {(hoveredChatId === chat.id || activeChatId === chat.id || contextMenuChat === chat.id) && (
+                      {(hoveredChatId === chat.id || activeChatId === chat.id || contextMenuChat === chat.id) ? (
                         <div className="flex items-center shrink-0 relative" style={{ zIndex: 5 }}>
                           <button
                             onClick={e => { e.stopPropagation(); setContextMenuChat(contextMenuChat === chat.id ? null : chat.id); }}
-                            className="p-1.5 rounded-lg hover:bg-white/10 text-neutral-400 hover:text-white transition-colors"
+                            className="p-1.5 rounded-lg text-neutral-300 hover:text-white transition-colors"
+                            style={{ backgroundColor: 'rgba(255,255,255,0.08)' }}
                           >
                             <MoreHorizontal size={16} />
                           </button>
