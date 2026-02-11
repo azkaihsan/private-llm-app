@@ -115,6 +115,11 @@ async def create_chat(data: ChatCreate):
     await db.chats.insert_one({**chat, "_id": chat["id"]})
     return chat
 
+@api_router.get("/chats/archived")
+async def get_archived_chats():
+    chats = await db.chats.find({"archived": True}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return chats
+
 @api_router.get("/chats/{chat_id}")
 async def get_chat(chat_id: str):
     chat = await db.chats.find_one({"id": chat_id}, {"_id": 0})
