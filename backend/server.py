@@ -200,6 +200,78 @@ async def send_message(chat_id: str, data: MessageCreate):
         "assistant_message": {k: v for k, v in ai_msg.items() if k != "_id"},
     }
 
+# ===== Archive, Export, Import Endpoints =====
+
+@api_router.get("/chats/archived")
+async def get_archived_chats():
+    chats = await db.chats.find({"archived": True}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return chats
+
+@api_router.put("/chats/{chat_id}/archive")
+async def archive_chat(chat_id: str):
+    result = await db.chats.update_one({"id": chat_id}, {"$set": {"archived": True}})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    return {"status": "ok"}
+
+@api_router.put("/chats/{chat_id}/unarchive")
+async def unarchive_chat(chat_id: str):
+    result = await db.chats.update_one({"id": chat_id}, {"$set": {"archived": False}})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    return {"status": "ok"}
+
+@api_router.get("/chats/{chat_id}/export")
+async def export_chat(chat_id: str):
+    chat = await db.chats.find_one({"id": chat_id}, {"_id": 0})
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    messages = await db.messages.find({"chat_id": chat_id}, {"_id": 0}).sort("timestamp", 1).to_list(1000)
+    return {
+        "version": "1.0",
+        "source": "open-webui-clone",
+        "chat": chat,
+        "messages": messages,
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+class ChatImport(BaseModel):
+    version: str = "1.0"
+    chat: dict
+    messages: list
+
+@api_router.post("/chats/import")
+async def import_chat(data: ChatImport):
+    new_chat_id = str(uuid.uuid4())
+    chat_data = {
+        "id": new_chat_id,
+        "title": data.chat.get("title", "Imported Chat"),
+        "model": data.chat.get("model", "gpt-4o"),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "archived": False,
+    }
+    await db.chats.insert_one({**chat_data, "_id": new_chat_id})
+
+    for msg in data.messages:
+        new_msg = {
+            "id": str(uuid.uuid4()),
+            "chat_id": new_chat_id,
+            "role": msg.get("role", "user"),
+            "content": msg.get("content", ""),
+            "timestamp": msg.get("timestamp", datetime.now(timezone.utc).isoformat()),
+        }
+        await db.messages.insert_one({**new_msg, "_id": new_msg["id"]})
+
+    return {"status": "ok", "chat_id": new_chat_id, "chat": chat_data}
+
+@api_router.delete("/chats/archived/all")
+async def delete_all_archived():
+    archived = await db.chats.find({"archived": True}, {"id": 1, "_id": 0}).to_list(1000)
+    for chat in archived:
+        await db.messages.delete_many({"chat_id": chat["id"]})
+    await db.chats.delete_many({"archived": True})
+    return {"status": "ok", "deleted_count": len(archived)}
+
 # ===== Settings Endpoints =====
 
 @api_router.get("/settings")
