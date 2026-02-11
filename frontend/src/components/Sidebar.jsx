@@ -203,17 +203,21 @@ const Sidebar = ({
               <div className="px-2 py-2 text-[11px] font-medium text-neutral-500 uppercase tracking-wider">
                 {group}
               </div>
-              {items.map(chat => (
+              {items.map(chat => {
+                const isActive = activeChatId === chat.id;
+                const isHovered = hoveredChatId === chat.id;
+                const isMenuOpen = contextMenuChat === chat.id;
+                const showActions = isActive || isHovered || isMenuOpen;
+
+                return (
                 <div
                   key={chat.id}
-                  className={`group relative flex items-center rounded-lg cursor-pointer mb-0.5 transition-colors ${
-                    activeChatId === chat.id
-                      ? 'bg-[#212121]'
-                      : 'hover:bg-white/5'
+                  className={`group relative rounded-lg cursor-pointer mb-0.5 overflow-hidden transition-colors ${
+                    isActive ? 'bg-[#212121]' : 'hover:bg-white/5'
                   }`}
                   onClick={() => onSelectChat(chat.id)}
                   onMouseEnter={() => setHoveredChatId(chat.id)}
-                  onMouseLeave={() => { if (contextMenuChat !== chat.id) setHoveredChatId(null); }}
+                  onMouseLeave={() => { if (!isMenuOpen) setHoveredChatId(null); }}
                 >
                   {editingChatId === chat.id ? (
                     <input
@@ -227,23 +231,25 @@ const Sidebar = ({
                       onClick={e => e.stopPropagation()}
                     />
                   ) : (
-                    <>
+                    <div className="flex items-center">
                       <span className="flex-1 min-w-0 text-sm text-neutral-200 truncate py-2 px-3">
                         {chat.title}
                       </span>
-                      <div
-                        className="shrink-0 pr-1 transition-opacity duration-150"
-                        style={{
-                          opacity: (hoveredChatId === chat.id || activeChatId === chat.id || contextMenuChat === chat.id) ? 1 : 0,
-                          pointerEvents: (hoveredChatId === chat.id || activeChatId === chat.id || contextMenuChat === chat.id) ? 'auto' : 'none',
-                        }}
-                      >
+                      {showActions && (
                         <button
-                          onClick={e => { e.stopPropagation(); setContextMenuChat(contextMenuChat === chat.id ? null : chat.id); }}
-                          className="p-1 rounded-md text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
+                          onClick={e => { e.stopPropagation(); setContextMenuChat(isMenuOpen ? null : chat.id); }}
+                          className="shrink-0 p-1.5 mr-1 rounded-md text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
                         >
                           <MoreHorizontal size={16} />
                         </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Context Menu - fixed positioned */}
+                  {isMenuOpen && (
+                    <>
+                      <div className="fixed inset-0 z-[100]" onClick={(e) => { e.stopPropagation(); setContextMenuChat(null); }} />
 
                             {/* Context Menu */}
                             {contextMenuChat === chat.id && (
