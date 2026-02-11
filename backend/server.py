@@ -70,6 +70,133 @@ async def get_status_checks():
 # Include the router in the main app
 app.include_router(api_router)
 
+# ===== Chat Models =====
+AVAILABLE_MODELS = [
+    {"id": "gpt-4o", "name": "GPT-4o", "provider": "openai", "size": ""},
+    {"id": "gpt-4.1-mini", "name": "GPT-4.1 mini", "provider": "openai", "size": ""},
+    {"id": "gpt-5.1", "name": "GPT-5.1", "provider": "openai", "size": ""},
+    {"id": "gpt-5-mini", "name": "GPT-5 mini", "provider": "openai", "size": ""},
+    {"id": "claude-sonnet-4-5-20250929", "name": "Claude Sonnet 4.5", "provider": "anthropic", "size": ""},
+    {"id": "claude-4-sonnet-20250514", "name": "Claude 4 Sonnet", "provider": "anthropic", "size": ""},
+    {"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash", "provider": "gemini", "size": ""},
+    {"id": "gemini-2.5-pro", "name": "Gemini 2.5 Pro", "provider": "gemini", "size": ""},
+]
+
+MODEL_PROVIDER_MAP = {m["id"]: m["provider"] for m in AVAILABLE_MODELS}
+
+class ChatCreate(BaseModel):
+    title: str = ""
+    model: str = "gpt-4o"
+
+class ChatUpdate(BaseModel):
+    title: str
+
+class MessageCreate(BaseModel):
+    content: str
+
+# ===== Chat Endpoints =====
+
+@api_router.get("/models")
+async def get_models():
+    return AVAILABLE_MODELS
+
+@api_router.get("/chats")
+async def get_chats():
+    chats = await db.chats.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return chats
+
+@api_router.post("/chats")
+async def create_chat(data: ChatCreate):
+    chat = {
+        "id": str(uuid.uuid4()),
+        "title": data.title or "New Chat",
+        "model": data.model,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.chats.insert_one({**chat, "_id": chat["id"]})
+    return chat
+
+@api_router.get("/chats/{chat_id}")
+async def get_chat(chat_id: str):
+    chat = await db.chats.find_one({"id": chat_id}, {"_id": 0})
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    messages = await db.messages.find(
+        {"chat_id": chat_id}, {"_id": 0}
+    ).sort("timestamp", 1).to_list(1000)
+    chat["messages"] = messages
+    return chat
+
+@api_router.put("/chats/{chat_id}")
+async def update_chat(chat_id: str, data: ChatUpdate):
+    result = await db.chats.update_one({"id": chat_id}, {"$set": {"title": data.title}})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    return {"status": "ok"}
+
+@api_router.delete("/chats/{chat_id}")
+async def delete_chat(chat_id: str):
+    await db.chats.delete_one({"id": chat_id})
+    await db.messages.delete_many({"chat_id": chat_id})
+    return {"status": "ok"}
+
+@api_router.post("/chats/{chat_id}/messages")
+async def send_message(chat_id: str, data: MessageCreate):
+    chat = await db.chats.find_one({"id": chat_id}, {"_id": 0})
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+
+    now_ts = datetime.now(timezone.utc).isoformat()
+
+    # Save user message
+    user_msg = {
+        "id": str(uuid.uuid4()),
+        "chat_id": chat_id,
+        "role": "user",
+        "content": data.content,
+        "timestamp": now_ts,
+    }
+    await db.messages.insert_one({**user_msg, "_id": user_msg["id"]})
+
+    # Auto-title on first message
+    existing = await db.messages.count_documents({"chat_id": chat_id})
+    if existing <= 1:
+        title = data.content[:50] + ("..." if len(data.content) > 50 else "")
+        await db.chats.update_one({"id": chat_id}, {"$set": {"title": title}})
+
+    # Get LLM response
+    model_id = chat.get("model", "gpt-4o")
+    provider = MODEL_PROVIDER_MAP.get(model_id, "openai")
+    api_key = os.environ.get("EMERGENT_LLM_KEY", "")
+
+    try:
+        llm = LlmChat(
+            api_key=api_key,
+            session_id=chat_id,
+            system_message="You are a helpful AI assistant. You provide clear, accurate, and well-formatted responses using markdown when appropriate."
+        ).with_model(provider, model_id)
+
+        user_message = UserMessage(text=data.content)
+        response_text = await llm.send_message(user_message)
+    except Exception as e:
+        logger.error(f"LLM error: {e}")
+        response_text = f"Sorry, I encountered an error while generating a response. Please try again.\n\nError: {str(e)}"
+
+    ai_msg = {
+        "id": str(uuid.uuid4()),
+        "chat_id": chat_id,
+        "role": "assistant",
+        "content": response_text,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.messages.insert_one({**ai_msg, "_id": ai_msg["id"]})
+
+    # Return both messages without _id
+    return {
+        "user_message": {k: v for k, v in user_msg.items() if k != "_id"},
+        "assistant_message": {k: v for k, v in ai_msg.items() if k != "_id"},
+    }
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
