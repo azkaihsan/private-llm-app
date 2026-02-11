@@ -67,8 +67,7 @@ async def get_status_checks():
     
     return status_checks
 
-# Include the router in the main app
-app.include_router(api_router)
+# Include the router in the main app - moved to after all routes are defined
 
 # ===== Chat Models =====
 AVAILABLE_MODELS = [
