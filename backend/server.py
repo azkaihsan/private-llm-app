@@ -207,11 +207,6 @@ async def send_message(chat_id: str, data: MessageCreate):
 
 # ===== Archive, Export, Import Endpoints =====
 
-@api_router.get("/chats/archived")
-async def get_archived_chats():
-    chats = await db.chats.find({"archived": True}, {"_id": 0}).sort("created_at", -1).to_list(100)
-    return chats
-
 @api_router.put("/chats/{chat_id}/archive")
 async def archive_chat(chat_id: str):
     result = await db.chats.update_one({"id": chat_id}, {"$set": {"archived": True}})
