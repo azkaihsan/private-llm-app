@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ArrowUp, Plus, Mic, Paperclip, Globe, CircleStop } from 'lucide-react';
+import { useSettings } from '@/context/SettingsContext';
 
 const ChatInput = ({ onSend, isTyping, placeholder }) => {
   const [message, setMessage] = useState('');
   const textareaRef = useRef(null);
+  const { settings } = useSettings();
 
   useEffect(() => {
     if (textareaRef.current) {
