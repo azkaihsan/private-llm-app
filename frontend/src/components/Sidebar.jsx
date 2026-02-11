@@ -300,7 +300,7 @@ const Sidebar = ({
             <div className="text-center text-neutral-500 text-sm py-8">No chats found</div>
           )}
         </div>
-      </ScrollArea>
+      </div>
 
       {/* Hidden file input for import */}
       <input
