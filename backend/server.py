@@ -169,10 +169,14 @@ async def send_message(chat_id: str, data: MessageCreate):
     api_key = os.environ.get("EMERGENT_LLM_KEY", "")
 
     try:
+        # Load custom system prompt from settings
+        app_settings = await db.app_settings.find_one({"_id": "global"}, {"_id": 0})
+        system_prompt = (app_settings or {}).get("systemPrompt", "You are a helpful AI assistant. You provide clear, accurate, and well-formatted responses using markdown when appropriate.")
+
         llm = LlmChat(
             api_key=api_key,
             session_id=chat_id,
-            system_message="You are a helpful AI assistant. You provide clear, accurate, and well-formatted responses using markdown when appropriate."
+            system_message=system_prompt
         ).with_model(provider, model_id)
 
         user_message = UserMessage(text=data.content)
