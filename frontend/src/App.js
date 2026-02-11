@@ -1,25 +1,75 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import "@/App.css";
 import Sidebar from "@/components/Sidebar";
 import WelcomeScreen from "@/components/WelcomeScreen";
 import ChatArea from "@/components/ChatArea";
 import ChatInput from "@/components/ChatInput";
-import { models, initialChats, suggestions, mockResponses } from "@/data/mockData";
+import { suggestions } from "@/data/mockData";
 import { PanelLeft, SquarePen, ChevronDown, Check, Search } from "lucide-react";
+import axios from "axios";
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const API = `${BACKEND_URL}/api`;
 
 function App() {
-  const [chats, setChats] = useState(initialChats);
+  const [chats, setChats] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [selectedModel, setSelectedModel] = useState(models[0]);
+  const [selectedModel, setSelectedModel] = useState(null);
+  const [models, setModels] = useState([]);
   const [isTyping, setIsTyping] = useState(false);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [modelSearch, setModelSearch] = useState("");
+  const [activeMessages, setActiveMessages] = useState([]);
 
-  const activeChat = chats.find(c => c.id === activeChatId);
+  // Fetch models on mount
+  useEffect(() => {
+    const fetchModels = async () => {
+      try {
+        const res = await axios.get(`${API}/models`);
+        setModels(res.data);
+        if (res.data.length > 0) setSelectedModel(res.data[0]);
+      } catch (e) {
+        console.error("Failed to fetch models:", e);
+      }
+    };
+    fetchModels();
+  }, []);
+
+  // Fetch chats on mount
+  useEffect(() => {
+    const fetchChats = async () => {
+      try {
+        const res = await axios.get(`${API}/chats`);
+        const mapped = res.data.map(c => ({
+          ...c,
+          createdAt: new Date(c.created_at).getTime(),
+        }));
+        setChats(mapped);
+      } catch (e) {
+        console.error("Failed to fetch chats:", e);
+      }
+    };
+    fetchChats();
+  }, []);
+
+  // Fetch messages when active chat changes
+  useEffect(() => {
+    if (!activeChatId) { setActiveMessages([]); return; }
+    const fetchMessages = async () => {
+      try {
+        const res = await axios.get(`${API}/chats/${activeChatId}`);
+        setActiveMessages(res.data.messages || []);
+      } catch (e) {
+        console.error("Failed to fetch chat:", e);
+      }
+    };
+    fetchMessages();
+  }, [activeChatId]);
 
   const createNewChat = useCallback(() => {
     setActiveChatId(null);
+    setActiveMessages([]);
     setIsTyping(false);
   }, []);
 
@@ -28,55 +78,70 @@ function App() {
     setIsTyping(false);
   }, []);
 
-  const deleteChat = useCallback((chatId) => {
-    setChats(prev => prev.filter(c => c.id !== chatId));
-    if (activeChatId === chatId) setActiveChatId(null);
+  const deleteChat = useCallback(async (chatId) => {
+    try {
+      await axios.delete(`${API}/chats/${chatId}`);
+      setChats(prev => prev.filter(c => c.id !== chatId));
+      if (activeChatId === chatId) { setActiveChatId(null); setActiveMessages([]); }
+    } catch (e) { console.error("Failed to delete chat:", e); }
   }, [activeChatId]);
 
-  const renameChat = useCallback((chatId, newTitle) => {
-    setChats(prev => prev.map(c => c.id === chatId ? { ...c, title: newTitle } : c));
+  const renameChat = useCallback(async (chatId, newTitle) => {
+    try {
+      await axios.put(`${API}/chats/${chatId}`, { title: newTitle });
+      setChats(prev => prev.map(c => c.id === chatId ? { ...c, title: newTitle } : c));
+    } catch (e) { console.error("Failed to rename chat:", e); }
   }, []);
 
-  const sendMessage = useCallback((content) => {
-    const msgId = `msg-${Date.now()}`;
-    const userMsg = { id: msgId, role: "user", content, timestamp: Date.now() };
+  const sendMessage = useCallback(async (content) => {
+    if (isTyping) return;
+    const modelId = selectedModel?.id || "gpt-4o";
 
     if (!activeChatId) {
-      const newChatId = `chat-${Date.now()}`;
-      const title = content.length > 40 ? content.slice(0, 40) + "..." : content;
-      const newChat = {
-        id: newChatId,
-        title,
-        model: selectedModel.id,
-        createdAt: Date.now(),
-        messages: [userMsg],
-      };
-      setChats(prev => [newChat, ...prev]);
-      setActiveChatId(newChatId);
+      // Create new chat first
+      try {
+        const title = content.length > 50 ? content.slice(0, 50) + "..." : content;
+        const res = await axios.post(`${API}/chats`, { title, model: modelId });
+        const newChat = { ...res.data, createdAt: new Date(res.data.created_at).getTime() };
+        setChats(prev => [newChat, ...prev]);
+        setActiveChatId(newChat.id);
 
-      setIsTyping(true);
-      setTimeout(() => {
-        const aiResponse = mockResponses[Math.floor(Math.random() * mockResponses.length)];
-        const aiMsg = { id: `msg-${Date.now()}`, role: "assistant", content: aiResponse, timestamp: Date.now() };
-        setChats(prev => prev.map(c => c.id === newChatId ? { ...c, messages: [...c.messages, aiMsg] } : c));
+        // Optimistic: show user message immediately
+        const tempUserMsg = { id: `temp-${Date.now()}`, role: "user", content, timestamp: new Date().toISOString() };
+        setActiveMessages([tempUserMsg]);
+        setIsTyping(true);
+
+        // Send message to backend
+        const msgRes = await axios.post(`${API}/chats/${newChat.id}/messages`, { content });
+        setActiveMessages([msgRes.data.user_message, msgRes.data.assistant_message]);
+
+        // Update chat title from backend
+        const updatedChat = await axios.get(`${API}/chats/${newChat.id}`);
+        setChats(prev => prev.map(c => c.id === newChat.id ? { ...c, title: updatedChat.data.title } : c));
         setIsTyping(false);
-      }, 1200 + Math.random() * 800);
+      } catch (e) {
+        console.error("Failed to create chat:", e);
+        setIsTyping(false);
+      }
     } else {
-      setChats(prev => prev.map(c =>
-        c.id === activeChatId ? { ...c, messages: [...c.messages, userMsg] } : c
-      ));
-
+      // Add message to existing chat
+      const tempUserMsg = { id: `temp-${Date.now()}`, role: "user", content, timestamp: new Date().toISOString() };
+      setActiveMessages(prev => [...prev, tempUserMsg]);
       setIsTyping(true);
-      setTimeout(() => {
-        const aiResponse = mockResponses[Math.floor(Math.random() * mockResponses.length)];
-        const aiMsg = { id: `msg-${Date.now()}`, role: "assistant", content: aiResponse, timestamp: Date.now() };
-        setChats(prev => prev.map(c =>
-          c.id === activeChatId ? { ...c, messages: [...c.messages, aiMsg] } : c
-        ));
+
+      try {
+        const msgRes = await axios.post(`${API}/chats/${activeChatId}/messages`, { content });
+        setActiveMessages(prev => {
+          const filtered = prev.filter(m => m.id !== tempUserMsg.id);
+          return [...filtered, msgRes.data.user_message, msgRes.data.assistant_message];
+        });
         setIsTyping(false);
-      }, 1200 + Math.random() * 800);
+      } catch (e) {
+        console.error("Failed to send message:", e);
+        setIsTyping(false);
+      }
     }
-  }, [activeChatId, selectedModel]);
+  }, [activeChatId, selectedModel, isTyping]);
 
   const handleSuggestionClick = useCallback((suggestion) => {
     sendMessage(`${suggestion.title} ${suggestion.subtitle}`);
@@ -88,7 +153,6 @@ function App() {
 
   return (
     <div className="App flex h-screen bg-[#212121] text-white overflow-hidden">
-      {/* Sidebar */}
       <Sidebar
         chats={chats}
         activeChatId={activeChatId}
@@ -100,89 +164,80 @@ function App() {
         onToggle={() => setSidebarOpen(false)}
       />
 
-      {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 relative">
-        {/* Top Bar */}
         <div className="flex items-center gap-2 p-2 shrink-0">
           {!sidebarOpen && (
             <div className="flex items-center gap-0.5">
-              <button
-                onClick={() => setSidebarOpen(true)}
-                className="p-2 rounded-lg hover:bg-white/5 text-neutral-400 hover:text-white transition-colors"
-              >
+              <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-lg hover:bg-white/5 text-neutral-400 hover:text-white transition-colors">
                 <PanelLeft size={20} />
               </button>
-              <button
-                onClick={createNewChat}
-                className="p-2 rounded-lg hover:bg-white/5 text-neutral-400 hover:text-white transition-colors"
-              >
+              <button onClick={createNewChat} className="p-2 rounded-lg hover:bg-white/5 text-neutral-400 hover:text-white transition-colors">
                 <SquarePen size={20} />
               </button>
             </div>
           )}
 
-          {/* Model Selector */}
-          <div className="relative">
-            <button
-              onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-white/5 transition-colors"
-            >
-              <span className="text-sm font-medium text-neutral-200">{selectedModel.name}</span>
-              <ChevronDown size={14} className="text-neutral-400" />
-            </button>
+          {selectedModel && (
+            <div className="relative">
+              <button
+                onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-white/5 transition-colors"
+              >
+                <span className="text-sm font-medium text-neutral-200">{selectedModel.name}</span>
+                <ChevronDown size={14} className="text-neutral-400" />
+              </button>
 
-            {modelDropdownOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setModelDropdownOpen(false)} />
-                <div className="absolute top-full left-0 mt-1 w-72 bg-[#2f2f2f] rounded-xl shadow-2xl border border-white/10 overflow-hidden z-50">
-                  <div className="p-2">
-                    <div className="relative">
-                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
-                      <input
-                        type="text"
-                        value={modelSearch}
-                        onChange={e => setModelSearch(e.target.value)}
-                        placeholder="Search a model"
-                        className="w-full bg-[#3a3a3a] text-white text-sm rounded-lg pl-9 pr-3 py-2 outline-none placeholder:text-neutral-500"
-                        autoFocus
-                      />
+              {modelDropdownOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setModelDropdownOpen(false)} />
+                  <div className="absolute top-full left-0 mt-1 w-72 bg-[#2f2f2f] rounded-xl shadow-2xl border border-white/10 overflow-hidden z-50">
+                    <div className="p-2">
+                      <div className="relative">
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
+                        <input
+                          type="text"
+                          value={modelSearch}
+                          onChange={e => setModelSearch(e.target.value)}
+                          placeholder="Search a model"
+                          className="w-full bg-[#3a3a3a] text-white text-sm rounded-lg pl-9 pr-3 py-2 outline-none placeholder:text-neutral-500"
+                          autoFocus
+                        />
+                      </div>
+                    </div>
+                    <div className="max-h-60 overflow-y-auto px-1 pb-1">
+                      {filteredModels.map(model => (
+                        <button
+                          key={model.id}
+                          onClick={() => { setSelectedModel(model); setModelDropdownOpen(false); setModelSearch(""); }}
+                          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                            selectedModel.id === model.id ? 'bg-white/10 text-white' : 'text-neutral-300 hover:bg-white/5'
+                          }`}
+                        >
+                          <div className="flex flex-col items-start">
+                            <span className="font-medium">{model.name}</span>
+                            {model.provider && <span className="text-xs text-neutral-500">{model.provider}</span>}
+                          </div>
+                          {selectedModel.id === model.id && <Check size={16} className="text-white" />}
+                        </button>
+                      ))}
                     </div>
                   </div>
-                  <div className="max-h-60 overflow-y-auto px-1 pb-1">
-                    {filteredModels.map(model => (
-                      <button
-                        key={model.id}
-                        onClick={() => { setSelectedModel(model); setModelDropdownOpen(false); setModelSearch(""); }}
-                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-colors ${
-                          selectedModel.id === model.id ? 'bg-white/10 text-white' : 'text-neutral-300 hover:bg-white/5'
-                        }`}
-                      >
-                        <div className="flex flex-col items-start">
-                          <span className="font-medium">{model.name}</span>
-                          {model.size && <span className="text-xs text-neutral-500">{model.size}</span>}
-                        </div>
-                        {selectedModel.id === model.id && <Check size={16} className="text-white" />}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Content */}
-        {activeChat ? (
-          <ChatArea messages={activeChat.messages} isTyping={isTyping} />
+        {activeChatId ? (
+          <ChatArea messages={activeMessages} isTyping={isTyping} />
         ) : (
           <WelcomeScreen suggestions={suggestions} onSuggestionClick={handleSuggestionClick} />
         )}
 
-        {/* Input */}
         <ChatInput
           onSend={sendMessage}
           isTyping={isTyping}
-          placeholder={activeChat ? "Ask a follow-up..." : "Ask anything"}
+          placeholder={activeChatId ? "Ask a follow-up..." : "Ask anything"}
         />
       </div>
     </div>
