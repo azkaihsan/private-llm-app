@@ -1,15 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Plus, Search, MessageSquare, Pencil, Trash2,
   PanelLeft, Folder, Settings, LogOut, CircleUser,
-  SquarePen, EllipsisVertical, X, Archive, ChevronDown
+  SquarePen, EllipsisVertical, X, Archive, ChevronDown,
+  Download, Upload, ArchiveRestore, MoreHorizontal, ArrowLeft
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useSettings } from '@/context/SettingsContext';
 
 const Sidebar = ({
   chats, activeChatId, onSelectChat, onNewChat, onDeleteChat,
-  onRenameChat, isOpen, onToggle, onOpenSettings
+  onRenameChat, isOpen, onToggle, onOpenSettings,
+  onArchiveChat, onExportChat, onImportChat,
+  archivedChats, onUnarchiveChat, onDeleteArchivedChat, onDeleteAllArchived, onRefreshArchived
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -17,7 +20,10 @@ const Sidebar = ({
   const [editTitle, setEditTitle] = useState('');
   const [hoveredChatId, setHoveredChatId] = useState(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [contextMenuChat, setContextMenuChat] = useState(null);
+  const [showArchived, setShowArchived] = useState(false);
   const { settings } = useSettings();
+  const fileInputRef = useRef(null);
 
   const groupChatsByDate = (chatList) => {
     const groups = { 'Today': [], 'Yesterday': [], 'Previous 7 Days': [], 'Previous 30 Days': [], 'Older': [] };
@@ -41,6 +47,7 @@ const Sidebar = ({
     e.stopPropagation();
     setEditingChatId(chat.id);
     setEditTitle(chat.title);
+    setContextMenuChat(null);
   };
 
   const handleFinishRename = (chatId) => {
@@ -48,8 +55,95 @@ const Sidebar = ({
     setEditingChatId(null);
   };
 
+  const handleImportFile = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        onImportChat && onImportChat(data);
+      } catch (err) {
+        alert('Invalid chat file. Please select a valid JSON export.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const handleOpenArchived = () => {
+    setShowArchived(true);
+    setShowUserMenu(false);
+    onRefreshArchived && onRefreshArchived();
+  };
+
   if (!isOpen) return null;
 
+  // ===== Archived Chats View =====
+  if (showArchived) {
+    return (
+      <div className="w-[260px] h-full flex flex-col relative shrink-0 transition-all duration-300" style={{ backgroundColor: settings.sidebarBg }}>
+        <div className="flex items-center gap-2 p-2 pt-3">
+          <button
+            onClick={() => setShowArchived(false)}
+            className="p-2 rounded-lg hover:bg-white/5 text-neutral-400 hover:text-white transition-colors"
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <span className="text-sm font-medium text-neutral-200 flex-1">Archived Chats</span>
+          {archivedChats && archivedChats.length > 0 && (
+            <button
+              onClick={() => { if (window.confirm('Delete all archived chats permanently?')) onDeleteAllArchived && onDeleteAllArchived(); }}
+              className="p-2 rounded-lg hover:bg-white/5 text-neutral-400 hover:text-red-400 transition-colors"
+              title="Delete all archived"
+            >
+              <Trash2 size={16} />
+            </button>
+          )}
+        </div>
+
+        <ScrollArea className="flex-1 px-2">
+          <div className="pb-2">
+            {(!archivedChats || archivedChats.length === 0) ? (
+              <div className="text-center text-neutral-500 text-sm py-8">
+                <Archive size={24} className="mx-auto mb-2 opacity-50" />
+                No archived chats
+              </div>
+            ) : (
+              archivedChats.map(chat => (
+                <div
+                  key={chat.id}
+                  className="group flex items-center rounded-lg mb-0.5 hover:bg-white/5 transition-colors"
+                >
+                  <span className="flex-1 text-sm text-neutral-200 truncate py-2 px-3">
+                    {chat.title}
+                  </span>
+                  <div className="flex items-center gap-0.5 pr-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => onUnarchiveChat && onUnarchiveChat(chat.id)}
+                      className="p-1 rounded hover:bg-white/10 text-neutral-400 hover:text-green-400 transition-colors"
+                      title="Unarchive"
+                    >
+                      <ArchiveRestore size={14} />
+                    </button>
+                    <button
+                      onClick={() => { if (window.confirm('Delete this chat permanently?')) onDeleteArchivedChat && onDeleteArchivedChat(chat.id); }}
+                      className="p-1 rounded hover:bg-white/10 text-neutral-400 hover:text-red-400 transition-colors"
+                      title="Delete permanently"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </ScrollArea>
+      </div>
+    );
+  }
+
+  // ===== Main Sidebar View =====
   return (
     <div className="w-[260px] h-full flex flex-col relative shrink-0 transition-all duration-300" style={{ backgroundColor: settings.sidebarBg }}>
       {/* Header */}
@@ -119,7 +213,7 @@ const Sidebar = ({
                   }`}
                   onClick={() => onSelectChat(chat.id)}
                   onMouseEnter={() => setHoveredChatId(chat.id)}
-                  onMouseLeave={() => setHoveredChatId(null)}
+                  onMouseLeave={() => { setHoveredChatId(null); if (contextMenuChat === chat.id) {} }}
                 >
                   {editingChatId === chat.id ? (
                     <input
@@ -139,18 +233,49 @@ const Sidebar = ({
                       </span>
                       {(hoveredChatId === chat.id || activeChatId === chat.id) && (
                         <div className="flex items-center gap-0.5 pr-1 shrink-0">
-                          <button
-                            onClick={e => handleStartRename(e, chat)}
-                            className="p-1 rounded hover:bg-white/10 text-neutral-400 hover:text-white transition-colors"
-                          >
-                            <Pencil size={14} />
-                          </button>
-                          <button
-                            onClick={e => { e.stopPropagation(); onDeleteChat(chat.id); }}
-                            className="p-1 rounded hover:bg-white/10 text-neutral-400 hover:text-red-400 transition-colors"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                          <div className="relative">
+                            <button
+                              onClick={e => { e.stopPropagation(); setContextMenuChat(contextMenuChat === chat.id ? null : chat.id); }}
+                              className="p-1 rounded hover:bg-white/10 text-neutral-400 hover:text-white transition-colors"
+                            >
+                              <MoreHorizontal size={14} />
+                            </button>
+
+                            {/* Context Menu */}
+                            {contextMenuChat === chat.id && (
+                              <>
+                                <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setContextMenuChat(null); }} />
+                                <div className="absolute right-0 top-full mt-1 w-48 bg-[#2f2f2f] rounded-xl shadow-2xl border border-white/10 overflow-hidden z-50"
+                                  onClick={e => e.stopPropagation()}>
+                                  <button
+                                    onClick={() => { handleStartRename({ stopPropagation: () => {} }, chat); }}
+                                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-neutral-300 text-sm"
+                                  >
+                                    <Pencil size={14} /> Rename
+                                  </button>
+                                  <button
+                                    onClick={() => { onExportChat && onExportChat(chat.id); setContextMenuChat(null); }}
+                                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-neutral-300 text-sm"
+                                  >
+                                    <Download size={14} /> Export Chat
+                                  </button>
+                                  <button
+                                    onClick={() => { onArchiveChat && onArchiveChat(chat.id); setContextMenuChat(null); }}
+                                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-neutral-300 text-sm"
+                                  >
+                                    <Archive size={14} /> Archive
+                                  </button>
+                                  <div className="border-t border-white/10" />
+                                  <button
+                                    onClick={() => { if (window.confirm('Delete this chat?')) { onDeleteChat(chat.id); setContextMenuChat(null); } }}
+                                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-red-400 text-sm"
+                                  >
+                                    <Trash2 size={14} /> Delete
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
                         </div>
                       )}
                     </>
@@ -165,8 +290,24 @@ const Sidebar = ({
         </div>
       </ScrollArea>
 
+      {/* Hidden file input for import */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".json"
+        onChange={handleImportFile}
+        className="hidden"
+      />
+
       {/* Workspace & User */}
       <div className="border-t border-white/5 p-2">
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-white/5 text-neutral-300 hover:text-white transition-colors"
+        >
+          <Upload size={18} />
+          <span className="text-sm">Import Chat</span>
+        </button>
         <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-white/5 text-neutral-300 hover:text-white transition-colors">
           <Folder size={18} />
           <span className="text-sm">Workspace</span>
@@ -183,18 +324,21 @@ const Sidebar = ({
             <EllipsisVertical size={16} className="text-neutral-500" />
           </button>
           {showUserMenu && (
-            <div className="absolute bottom-full left-0 w-full mb-1 bg-[#2f2f2f] rounded-xl shadow-xl border border-white/10 overflow-hidden z-50">
-              <button onClick={() => { onOpenSettings && onOpenSettings(); setShowUserMenu(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-neutral-300 text-sm">
-                <Settings size={16} /> Settings
-              </button>
-              <button className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-neutral-300 text-sm">
-                <Archive size={16} /> Archived Chats
-              </button>
-              <div className="border-t border-white/10" />
-              <button className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-red-400 text-sm">
-                <LogOut size={16} /> Sign Out
-              </button>
-            </div>
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
+              <div className="absolute bottom-full left-0 w-full mb-1 bg-[#2f2f2f] rounded-xl shadow-xl border border-white/10 overflow-hidden z-50">
+                <button onClick={() => { onOpenSettings && onOpenSettings(); setShowUserMenu(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-neutral-300 text-sm">
+                  <Settings size={16} /> Settings
+                </button>
+                <button onClick={handleOpenArchived} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-neutral-300 text-sm">
+                  <Archive size={16} /> Archived Chats
+                </button>
+                <div className="border-t border-white/10" />
+                <button className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-red-400 text-sm">
+                  <LogOut size={16} /> Sign Out
+                </button>
+              </div>
+            </>
           )}
         </div>
       </div>
