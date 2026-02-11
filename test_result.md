@@ -101,3 +101,162 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: "Clone OpenWebUI - a ChatGPT-like AI chat interface with sidebar, model selector, markdown rendering, and real LLM backend integration"
+
+backend:
+  - task: "GET /api/models - List available AI models"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "Returns list of 8 models from OpenAI, Anthropic, Gemini providers"
+
+  - task: "GET /api/chats - List all chats"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "Returns chats sorted by created_at desc from MongoDB"
+
+  - task: "POST /api/chats - Create new chat"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "Creates chat with title and model, stores in MongoDB"
+
+  - task: "GET /api/chats/{chat_id} - Get chat with messages"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "Returns chat with all messages sorted by timestamp"
+
+  - task: "PUT /api/chats/{chat_id} - Rename chat"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "Updates chat title in MongoDB"
+
+  - task: "DELETE /api/chats/{chat_id} - Delete chat"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "Deletes chat and all associated messages"
+
+  - task: "POST /api/chats/{chat_id}/messages - Send message and get AI response"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "Saves user message, calls LLM via emergentintegrations, saves AI response. Uses EMERGENT_LLM_KEY. Auto-titles chat on first message."
+
+frontend:
+  - task: "Sidebar with chat list"
+    implemented: true
+    working: true
+    file: "src/components/Sidebar.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+        - agent: "main"
+        - comment: "Working with mock data, now integrated with backend API"
+
+  - task: "Chat area with markdown rendering"
+    implemented: true
+    working: true
+    file: "src/components/ChatArea.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+
+  - task: "Chat input"
+    implemented: true
+    working: true
+    file: "src/components/ChatInput.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+
+  - task: "Welcome screen"
+    implemented: true
+    working: true
+    file: "src/components/WelcomeScreen.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+
+  - task: "Backend integration"
+    implemented: true
+    working: "NA"
+    file: "src/App.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "App.js now fetches models and chats from API, sends messages to backend LLM"
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 1
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "GET /api/models"
+    - "POST /api/chats"
+    - "GET /api/chats"
+    - "GET /api/chats/{chat_id}"
+    - "PUT /api/chats/{chat_id}"
+    - "DELETE /api/chats/{chat_id}"
+    - "POST /api/chats/{chat_id}/messages"
+  stuck_tasks: []
+  test_all: true
+  test_priority: "high_first"
+
+agent_communication:
+    - agent: "main"
+    - message: "All backend endpoints implemented with MongoDB and emergentintegrations LLM. Please test all CRUD endpoints and the message sending endpoint. The LLM uses EMERGENT_LLM_KEY with provider/model mapping. Test flow: create chat -> send message -> verify AI response -> list chats -> get chat -> rename -> delete."
