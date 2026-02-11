@@ -206,7 +206,7 @@ const Sidebar = ({
               {items.map(chat => (
                 <div
                   key={chat.id}
-                  className={`group relative rounded-lg cursor-pointer mb-0.5 transition-colors ${
+                  className={`group relative flex items-center rounded-lg cursor-pointer mb-0.5 transition-colors ${
                     activeChatId === chat.id
                       ? 'bg-[#212121]'
                       : 'hover:bg-white/5'
@@ -227,19 +227,23 @@ const Sidebar = ({
                       onClick={e => e.stopPropagation()}
                     />
                   ) : (
-                    <div className="relative">
-                      <div className="text-sm text-neutral-200 truncate py-2 px-3 pr-9">
+                    <>
+                      <span className="flex-1 min-w-0 text-sm text-neutral-200 truncate py-2 px-3">
                         {chat.title}
-                      </div>
-                      {(hoveredChatId === chat.id || activeChatId === chat.id || contextMenuChat === chat.id) && (
-                        <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center" style={{ zIndex: 10 }}>
-                          <button
-                            onClick={e => { e.stopPropagation(); setContextMenuChat(contextMenuChat === chat.id ? null : chat.id); }}
-                            className="p-1 rounded-md text-neutral-300 hover:text-white transition-colors"
-                            style={{ backgroundColor: activeChatId === chat.id ? '#2a2a2a' : 'rgba(255,255,255,0.1)' }}
-                          >
-                            <MoreHorizontal size={16} />
-                          </button>
+                      </span>
+                      <div
+                        className="shrink-0 pr-1 transition-opacity duration-150"
+                        style={{
+                          opacity: (hoveredChatId === chat.id || activeChatId === chat.id || contextMenuChat === chat.id) ? 1 : 0,
+                          pointerEvents: (hoveredChatId === chat.id || activeChatId === chat.id || contextMenuChat === chat.id) ? 'auto' : 'none',
+                        }}
+                      >
+                        <button
+                          onClick={e => { e.stopPropagation(); setContextMenuChat(contextMenuChat === chat.id ? null : chat.id); }}
+                          className="p-1 rounded-md text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
+                        >
+                          <MoreHorizontal size={16} />
+                        </button>
 
                             {/* Context Menu */}
                             {contextMenuChat === chat.id && (
