@@ -5,6 +5,7 @@ import {
   SquarePen, EllipsisVertical, X, Archive, ChevronDown
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useSettings } from '@/context/SettingsContext';
 
 const Sidebar = ({
   chats, activeChatId, onSelectChat, onNewChat, onDeleteChat,
