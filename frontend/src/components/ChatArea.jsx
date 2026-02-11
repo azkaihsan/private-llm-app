@@ -90,6 +90,7 @@ const MarkdownContent = ({ content }) => {
 
 const MessageBubble = ({ message, isTyping }) => {
   const [hovering, setHovering] = React.useState(false);
+  const { settings } = useSettings();
   const isUser = message.role === 'user';
 
   return (
@@ -100,27 +101,27 @@ const MessageBubble = ({ message, isTyping }) => {
     >
       <div className={`flex gap-4 ${isUser ? 'flex-row-reverse max-w-[85%]' : 'max-w-full'}`}>
         {!isUser && (
-          <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center shrink-0 mt-1">
-            <span className="text-black font-bold text-[10px]">OI</span>
-          </div>
+          <LogoPreview settings={settings} size={28} className="mt-1" />
         )}
         <div className="flex flex-col min-w-0 flex-1">
-          <div className={`text-[15px] text-neutral-100 leading-relaxed ${
-            isUser ? 'bg-[#2f2f2f] rounded-3xl px-5 py-3' : ''
-          }`}>
-            {isTyping ? (
+          <div style={{ fontSize: `${settings.fontSize}px` }} className={`leading-relaxed ${
+            isUser ? 'rounded-3xl px-5 py-3' : ''
+          }`}
+          >
+            {isUser && <div style={{ backgroundColor: settings.userBubbleBg, borderRadius: '1.5rem', padding: '12px 20px' }}>
+              {isTyping ? null : <span className="whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>{message.content}</span>}
+            </div>}
+            {!isUser && (isTyping ? (
               <div className="flex items-center gap-1 py-1">
                 <div className="w-2 h-2 bg-neutral-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                 <div className="w-2 h-2 bg-neutral-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                 <div className="w-2 h-2 bg-neutral-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
-            ) : isUser ? (
-              <span className="whitespace-pre-wrap">{message.content}</span>
             ) : (
-              <div className="prose-invert max-w-none">
+              <div className="prose-invert max-w-none" style={{ color: 'var(--text-primary)' }}>
                 <MarkdownContent content={message.content} />
               </div>
-            )}
+            ))}
           </div>
           {/* Actions */}
           {!isTyping && hovering && !isUser && (
