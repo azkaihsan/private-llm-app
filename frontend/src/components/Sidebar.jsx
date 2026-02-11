@@ -206,14 +206,14 @@ const Sidebar = ({
               {items.map(chat => (
                 <div
                   key={chat.id}
-                  className={`group relative flex items-center rounded-lg cursor-pointer mb-0.5 transition-colors ${
+                  className={`group relative flex items-center rounded-lg cursor-pointer mb-0.5 transition-colors pr-1 ${
                     activeChatId === chat.id
                       ? 'bg-[#212121]'
                       : 'hover:bg-white/5'
                   }`}
                   onClick={() => onSelectChat(chat.id)}
                   onMouseEnter={() => setHoveredChatId(chat.id)}
-                  onMouseLeave={() => { setHoveredChatId(null); if (contextMenuChat === chat.id) {} }}
+                  onMouseLeave={() => { if (contextMenuChat !== chat.id) setHoveredChatId(null); }}
                 >
                   {editingChatId === chat.id ? (
                     <input
@@ -228,18 +228,17 @@ const Sidebar = ({
                     />
                   ) : (
                     <>
-                      <span className="flex-1 text-sm text-neutral-200 truncate py-2 px-3">
+                      <span className="flex-1 text-sm text-neutral-200 truncate py-2 px-3 min-w-0">
                         {chat.title}
                       </span>
-                      {(hoveredChatId === chat.id || activeChatId === chat.id) && (
-                        <div className="flex items-center gap-0.5 pr-1 shrink-0">
-                          <div className="relative">
-                            <button
-                              onClick={e => { e.stopPropagation(); setContextMenuChat(contextMenuChat === chat.id ? null : chat.id); }}
-                              className="p-1 rounded hover:bg-white/10 text-neutral-400 hover:text-white transition-colors"
-                            >
-                              <MoreHorizontal size={14} />
-                            </button>
+                      {(hoveredChatId === chat.id || activeChatId === chat.id || contextMenuChat === chat.id) && (
+                        <div className="flex items-center shrink-0 relative" style={{ zIndex: 5 }}>
+                          <button
+                            onClick={e => { e.stopPropagation(); setContextMenuChat(contextMenuChat === chat.id ? null : chat.id); }}
+                            className="p-1.5 rounded-lg hover:bg-white/10 text-neutral-400 hover:text-white transition-colors"
+                          >
+                            <MoreHorizontal size={16} />
+                          </button>
 
                             {/* Context Menu */}
                             {contextMenuChat === chat.id && (
