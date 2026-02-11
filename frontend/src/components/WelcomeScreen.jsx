@@ -1,21 +1,23 @@
 import React from 'react';
 import { GraduationCap, Lightbulb, Globe, Dumbbell } from 'lucide-react';
+import { useSettings } from '@/context/SettingsContext';
+import { LogoPreview } from '@/components/SettingsModal';
 
 const suggestionIcons = [GraduationCap, Lightbulb, Globe, Dumbbell];
 
 const WelcomeScreen = ({ suggestions, onSuggestionClick }) => {
+  const { settings } = useSettings();
+
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-4 pb-4">
       <div className="flex flex-col items-center max-w-2xl w-full">
         {/* Logo */}
         <div className="mb-6">
-          <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center">
-            <span className="text-black font-bold text-lg">OI</span>
-          </div>
+          <LogoPreview settings={settings} size={48} />
         </div>
 
         {/* Greeting */}
-        <h1 className="text-[28px] font-semibold text-white mb-8">
+        <h1 className="text-[28px] font-semibold mb-8" style={{ color: 'var(--text-primary)' }}>
           How can I help you today?
         </h1>
 
