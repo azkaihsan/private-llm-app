@@ -206,7 +206,7 @@ const Sidebar = ({
               {items.map(chat => (
                 <div
                   key={chat.id}
-                  className={`group relative flex items-center rounded-lg cursor-pointer mb-0.5 transition-colors pr-1 ${
+                  className={`group relative rounded-lg cursor-pointer mb-0.5 transition-colors ${
                     activeChatId === chat.id
                       ? 'bg-[#212121]'
                       : 'hover:bg-white/5'
@@ -222,21 +222,21 @@ const Sidebar = ({
                       onChange={e => setEditTitle(e.target.value)}
                       onBlur={() => handleFinishRename(chat.id)}
                       onKeyDown={e => { if (e.key === 'Enter') handleFinishRename(chat.id); if (e.key === 'Escape') setEditingChatId(null); }}
-                      className="flex-1 bg-transparent text-white text-sm py-2 px-3 outline-none"
+                      className="w-full bg-transparent text-white text-sm py-2 px-3 outline-none"
                       autoFocus
                       onClick={e => e.stopPropagation()}
                     />
                   ) : (
-                    <>
-                      <span className="flex-1 text-sm text-neutral-200 truncate py-2 px-3 min-w-0">
+                    <div className="relative overflow-hidden">
+                      <div className="text-sm text-neutral-200 truncate py-2 px-3 pr-9">
                         {chat.title}
-                      </span>
-                      {(hoveredChatId === chat.id || activeChatId === chat.id || contextMenuChat === chat.id) ? (
-                        <div className="flex items-center shrink-0 relative" style={{ zIndex: 5 }}>
+                      </div>
+                      {(hoveredChatId === chat.id || activeChatId === chat.id || contextMenuChat === chat.id) && (
+                        <div className="absolute right-0 top-0 bottom-0 flex items-center pr-1" style={{ zIndex: 5 }}>
                           <button
                             onClick={e => { e.stopPropagation(); setContextMenuChat(contextMenuChat === chat.id ? null : chat.id); }}
                             className="p-1.5 rounded-lg text-neutral-300 hover:text-white transition-colors"
-                            style={{ backgroundColor: 'rgba(255,255,255,0.08)' }}
+                            style={{ backgroundColor: activeChatId === chat.id ? '#212121' : settings.sidebarBg }}
                           >
                             <MoreHorizontal size={16} />
                           </button>
