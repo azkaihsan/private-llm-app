@@ -101,7 +101,7 @@ async def get_models():
 
 @api_router.get("/chats")
 async def get_chats():
-    chats = await db.chats.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    chats = await db.chats.find({"archived": {"$ne": True}}, {"_id": 0}).sort("created_at", -1).to_list(100)
     return chats
 
 @api_router.post("/chats")
