@@ -237,6 +237,14 @@ function AppContent() {
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(false)}
         onOpenSettings={() => setSettingsOpen(true)}
+        onArchiveChat={archiveChat}
+        onExportChat={exportChat}
+        onImportChat={importChat}
+        archivedChats={archivedChats}
+        onUnarchiveChat={unarchiveChat}
+        onDeleteArchivedChat={deleteArchivedChat}
+        onDeleteAllArchived={deleteAllArchived}
+        onRefreshArchived={fetchArchivedChats}
       />
 
       <div className="flex-1 flex flex-col min-w-0 relative">
