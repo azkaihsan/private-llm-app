@@ -4,6 +4,8 @@ import Sidebar from "@/components/Sidebar";
 import WelcomeScreen from "@/components/WelcomeScreen";
 import ChatArea from "@/components/ChatArea";
 import ChatInput from "@/components/ChatInput";
+import SettingsModal from "@/components/SettingsModal";
+import { SettingsProvider, useSettings } from "@/context/SettingsContext";
 import { suggestions } from "@/data/mockData";
 import { PanelLeft, SquarePen, ChevronDown, Check, Search } from "lucide-react";
 import axios from "axios";
@@ -11,7 +13,8 @@ import axios from "axios";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-function App() {
+function AppContent() {
+  const { settings } = useSettings();
   const [chats, setChats] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
