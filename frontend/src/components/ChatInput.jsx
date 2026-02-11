@@ -31,7 +31,7 @@ const ChatInput = ({ onSend, isTyping, placeholder }) => {
 
   return (
     <div className="w-full max-w-3xl mx-auto px-4 pb-4">
-      <div className="relative bg-[#2f2f2f] rounded-3xl shadow-lg">
+      <div className="relative rounded-3xl shadow-lg" style={{ backgroundColor: settings.inputBg }}>
         {/* Input Row */}
         <div className="flex items-end gap-2 p-2">
           <button className="p-2 rounded-full hover:bg-white/10 text-neutral-400 hover:text-white transition-colors shrink-0 mb-0.5">
