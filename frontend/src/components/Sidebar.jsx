@@ -211,7 +211,7 @@ const Sidebar = ({
                 return (
                 <div
                   key={chat.id}
-                  className={`group relative rounded-lg cursor-pointer mb-0.5 overflow-hidden transition-colors ${
+                  className={`group relative rounded-lg cursor-pointer mb-0.5 transition-colors ${
                     isActive ? 'bg-[#212121]' : 'hover:bg-white/5'
                   }`}
                   onClick={() => onSelectChat(chat.id)}
