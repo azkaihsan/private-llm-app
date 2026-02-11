@@ -4,6 +4,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { useSettings } from '@/context/SettingsContext';
+import { LogoPreview } from '@/components/SettingsModal';
 
 const CopyButton = ({ text }) => {
   const [copied, setCopied] = React.useState(false);
