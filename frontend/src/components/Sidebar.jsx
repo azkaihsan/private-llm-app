@@ -251,46 +251,50 @@ const Sidebar = ({
                     <>
                       <div className="fixed inset-0 z-[100]" onClick={(e) => { e.stopPropagation(); setContextMenuChat(null); }} />
 
-                            {/* Context Menu */}
-                            {contextMenuChat === chat.id && (
-                              <>
-                                <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setContextMenuChat(null); }} />
-                                <div className="fixed z-50 w-48 bg-[#2f2f2f] rounded-xl shadow-2xl border border-white/10 overflow-hidden"
-                                  style={{ left: '60px', marginTop: '4px' }}
-                                  onClick={e => e.stopPropagation()}>
-                                  <button
-                                    onClick={() => { handleStartRename({ stopPropagation: () => {} }, chat); }}
-                                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-neutral-300 text-sm"
-                                  >
-                                    <Pencil size={14} /> Rename
-                                  </button>
-                                  <button
-                                    onClick={() => { onExportChat && onExportChat(chat.id); setContextMenuChat(null); }}
-                                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-neutral-300 text-sm"
-                                  >
-                                    <Download size={14} /> Export Chat
-                                  </button>
-                                  <button
-                                    onClick={() => { onArchiveChat && onArchiveChat(chat.id); setContextMenuChat(null); }}
-                                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-neutral-300 text-sm"
-                                  >
-                                    <Archive size={14} /> Archive
-                                  </button>
-                                  <div className="border-t border-white/10" />
-                                  <button
-                                    onClick={() => { if (window.confirm('Delete this chat?')) { onDeleteChat(chat.id); setContextMenuChat(null); } }}
-                                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-red-400 text-sm"
-                                  >
-                                    <Trash2 size={14} /> Delete
-                                  </button>
-                                </div>
-                              </>
-                            )}
+                      <div className="fixed z-[101] w-48 bg-[#2f2f2f] rounded-xl shadow-2xl border border-white/10 overflow-hidden"
+                        style={{ left: '16px', top: 'auto', marginTop: '-5px' }}
+                        ref={el => {
+                          if (el) {
+                            const chatRow = el.closest('[class*="group relative"]');
+                            if (chatRow) {
+                              const rect = chatRow.getBoundingClientRect();
+                              el.style.top = `${rect.bottom + 4}px`;
+                              el.style.left = `${rect.left}px`;
+                            }
+                          }
+                        }}
+                        onClick={e => e.stopPropagation()}>
+                        <button
+                          onClick={() => { handleStartRename({ stopPropagation: () => {} }, chat); }}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-neutral-300 text-sm"
+                        >
+                          <Pencil size={14} /> Rename
+                        </button>
+                        <button
+                          onClick={() => { onExportChat && onExportChat(chat.id); setContextMenuChat(null); }}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-neutral-300 text-sm"
+                        >
+                          <Download size={14} /> Export Chat
+                        </button>
+                        <button
+                          onClick={() => { onArchiveChat && onArchiveChat(chat.id); setContextMenuChat(null); }}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-neutral-300 text-sm"
+                        >
+                          <Archive size={14} /> Archive
+                        </button>
+                        <div className="border-t border-white/10" />
+                        <button
+                          onClick={() => { if (window.confirm('Delete this chat?')) { onDeleteChat(chat.id); setContextMenuChat(null); } }}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-red-400 text-sm"
+                        >
+                          <Trash2 size={14} /> Delete
+                        </button>
                       </div>
                     </>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           ))}
           {filteredChats.length === 0 && (
