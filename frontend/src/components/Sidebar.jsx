@@ -182,7 +182,7 @@ const Sidebar = ({
           </button>
           {showUserMenu && (
             <div className="absolute bottom-full left-0 w-full mb-1 bg-[#2f2f2f] rounded-xl shadow-xl border border-white/10 overflow-hidden z-50">
-              <button className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-neutral-300 text-sm">
+              <button onClick={() => { onOpenSettings && onOpenSettings(); setShowUserMenu(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-neutral-300 text-sm">
                 <Settings size={16} /> Settings
               </button>
               <button className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-neutral-300 text-sm">
