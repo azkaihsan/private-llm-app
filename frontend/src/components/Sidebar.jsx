@@ -195,7 +195,7 @@ const Sidebar = ({
       )}
 
       {/* Chat List */}
-      <ScrollArea className="flex-1 px-2">
+      <div className="flex-1 overflow-y-auto px-2 custom-scrollbar">
         <div className="pb-2">
           {groupedChats.map(([group, items]) => (
             <div key={group} className="mb-1">
