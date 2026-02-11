@@ -97,6 +97,76 @@ function AppContent() {
     } catch (e) { console.error("Failed to rename chat:", e); }
   }, []);
 
+  // ===== Archive, Export, Import =====
+  const [archivedChats, setArchivedChats] = useState([]);
+
+  const archiveChat = useCallback(async (chatId) => {
+    try {
+      await axios.put(`${API}/chats/${chatId}/archive`);
+      setChats(prev => prev.filter(c => c.id !== chatId));
+      if (activeChatId === chatId) { setActiveChatId(null); setActiveMessages([]); }
+    } catch (e) { console.error("Failed to archive chat:", e); }
+  }, [activeChatId]);
+
+  const fetchArchivedChats = useCallback(async () => {
+    try {
+      const res = await axios.get(`${API}/chats/archived`);
+      setArchivedChats(res.data.map(c => ({ ...c, createdAt: new Date(c.created_at).getTime() })));
+    } catch (e) { console.error("Failed to fetch archived chats:", e); }
+  }, []);
+
+  const unarchiveChat = useCallback(async (chatId) => {
+    try {
+      await axios.put(`${API}/chats/${chatId}/unarchive`);
+      setArchivedChats(prev => prev.filter(c => c.id !== chatId));
+      // Refresh main chats
+      const res = await axios.get(`${API}/chats`);
+      setChats(res.data.map(c => ({ ...c, createdAt: new Date(c.created_at).getTime() })));
+    } catch (e) { console.error("Failed to unarchive chat:", e); }
+  }, []);
+
+  const deleteArchivedChat = useCallback(async (chatId) => {
+    try {
+      await axios.delete(`${API}/chats/${chatId}`);
+      setArchivedChats(prev => prev.filter(c => c.id !== chatId));
+    } catch (e) { console.error("Failed to delete archived chat:", e); }
+  }, []);
+
+  const deleteAllArchived = useCallback(async () => {
+    try {
+      await axios.delete(`${API}/chats/archived/all`);
+      setArchivedChats([]);
+    } catch (e) { console.error("Failed to delete all archived:", e); }
+  }, []);
+
+  const exportChat = useCallback(async (chatId) => {
+    try {
+      const res = await axios.get(`${API}/chats/${chatId}/export`);
+      const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const title = res.data.chat?.title || 'chat';
+      a.download = `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_export.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) { console.error("Failed to export chat:", e); }
+  }, []);
+
+  const importChat = useCallback(async (data) => {
+    try {
+      const payload = { version: data.version || "1.0", chat: data.chat, messages: data.messages };
+      const res = await axios.post(`${API}/chats/import`, payload);
+      // Refresh chats list
+      const chatsRes = await axios.get(`${API}/chats`);
+      setChats(chatsRes.data.map(c => ({ ...c, createdAt: new Date(c.created_at).getTime() })));
+      // Select the imported chat
+      if (res.data.chat_id) setActiveChatId(res.data.chat_id);
+    } catch (e) { console.error("Failed to import chat:", e); alert("Failed to import chat. Please check the file format."); }
+  }, []);
+
   const sendMessage = useCallback(async (content) => {
     if (isTyping) return;
     const modelId = selectedModel?.id || "gpt-4o";
