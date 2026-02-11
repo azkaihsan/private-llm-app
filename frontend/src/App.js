@@ -245,7 +245,17 @@ function AppContent() {
           placeholder={activeChatId ? "Ask a follow-up..." : "Ask anything"}
         />
       </div>
+
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
+  );
+}
+
+function App() {
+  return (
+    <SettingsProvider>
+      <AppContent />
+    </SettingsProvider>
   );
 }
 
