@@ -179,7 +179,7 @@ async def send_message(chat_id: str, data: MessageCreate):
         user_message = UserMessage(text=data.content)
         response_text = await llm.send_message(user_message)
     except Exception as e:
-        logger.error(f"LLM error: {e}")
+        print(f"LLM error: {e}")
         response_text = f"Sorry, I encountered an error while generating a response. Please try again.\n\nError: {str(e)}"
 
     ai_msg = {
