@@ -196,6 +196,22 @@ async def send_message(chat_id: str, data: MessageCreate):
         "assistant_message": {k: v for k, v in ai_msg.items() if k != "_id"},
     }
 
+# ===== Settings Endpoints =====
+
+@api_router.get("/settings")
+async def get_settings():
+    doc = await db.app_settings.find_one({"_id": "global"}, {"_id": 0})
+    return doc or {}
+
+@api_router.put("/settings")
+async def update_settings(data: dict):
+    await db.app_settings.update_one(
+        {"_id": "global"},
+        {"$set": data},
+        upsert=True
+    )
+    return {"status": "ok"}
+
 # Include the router in the main app after all routes are defined
 app.include_router(api_router)
 
