@@ -554,7 +554,12 @@ class BackendTester:
             ("6. POST /api/chats/{chat_id}/messages", self.test_send_message),
             ("7. GET /api/chats/{chat_id} (with messages)", self.test_get_chat_with_messages),
             ("8. DELETE /api/chats/{chat_id}", self.test_delete_chat),
-            ("9. GET /api/chats/{chat_id} (deleted)", self.test_get_deleted_chat)
+            ("9. GET /api/chats/{chat_id} (deleted)", self.test_get_deleted_chat),
+            ("10. GET /api/settings (initial)", self.test_get_settings_initial),
+            ("11. PUT /api/settings (save)", self.test_put_settings_save),
+            ("12. GET /api/settings (verify)", self.test_get_settings_verify),
+            ("13. PUT /api/settings (update)", self.test_put_settings_update),
+            ("14. GET /api/settings (final)", self.test_get_settings_final_verify)
         ]
         
         passed = 0
