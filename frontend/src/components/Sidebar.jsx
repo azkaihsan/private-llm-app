@@ -244,7 +244,8 @@ const Sidebar = ({
                             {contextMenuChat === chat.id && (
                               <>
                                 <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setContextMenuChat(null); }} />
-                                <div className="absolute right-0 top-full mt-1 w-48 bg-[#2f2f2f] rounded-xl shadow-2xl border border-white/10 overflow-hidden z-50"
+                                <div className="fixed z-50 w-48 bg-[#2f2f2f] rounded-xl shadow-2xl border border-white/10 overflow-hidden"
+                                  style={{ left: '60px', marginTop: '4px' }}
                                   onClick={e => e.stopPropagation()}>
                                   <button
                                     onClick={() => { handleStartRename({ stopPropagation: () => {} }, chat); }}
