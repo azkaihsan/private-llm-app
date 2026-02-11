@@ -17,6 +17,7 @@ const Sidebar = ({
   const [editTitle, setEditTitle] = useState('');
   const [hoveredChatId, setHoveredChatId] = useState(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const { settings } = useSettings();
 
   const groupChatsByDate = (chatList) => {
     const groups = { 'Today': [], 'Yesterday': [], 'Previous 7 Days': [], 'Previous 30 Days': [], 'Older': [] };
