@@ -210,6 +210,30 @@ backend:
         - agent: "testing"
         - comment: "✅ PASSED: Successfully sends message and receives real AI response. Returns both user_message and assistant_message objects. LLM integration working properly."
 
+  - task: "GET /api/settings - Get app settings"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "Returns global app settings from MongoDB (logo, theme, system prompt)"
+
+  - task: "PUT /api/settings - Save app settings"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "Upserts settings to MongoDB, supports logo, theme colors, font size, system prompt"
+
 frontend:
   - task: "Sidebar with chat list"
     implemented: true
