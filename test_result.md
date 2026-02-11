@@ -212,27 +212,33 @@ backend:
 
   - task: "GET /api/settings - Get app settings"
     implemented: true
-    working: "NA"
+    working: true
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: "NA"
         - agent: "main"
         - comment: "Returns global app settings from MongoDB (logo, theme, system prompt)"
+        - working: true
+        - agent: "testing"
+        - comment: "✅ PASSED: Successfully returns empty object initially, then correctly retrieves saved settings with all fields present"
 
   - task: "PUT /api/settings - Save app settings"
     implemented: true
-    working: "NA"
+    working: true
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: "NA"
         - agent: "main"
         - comment: "Upserts settings to MongoDB, supports logo, theme colors, font size, system prompt"
+        - working: true
+        - agent: "testing"
+        - comment: "✅ PASSED: Successfully saves and updates settings. Verified merge/upsert functionality - new fields added while existing fields persist correctly"
 
 frontend:
   - task: "Sidebar with chat list"
