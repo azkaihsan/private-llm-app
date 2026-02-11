@@ -376,7 +376,7 @@ frontend:
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 4
+  test_sequence: 5
   run_ui: false
 
 test_plan:
@@ -390,3 +390,7 @@ agent_communication:
     - message: "Added settings endpoints (GET/PUT /api/settings) for persisting app customization. Please test: 1) PUT settings with body like {appName: 'Test', theme: 'midnight-blue'}, 2) GET settings to verify persistence, 3) PUT again with different values, 4) Verify update works."
     - agent: "testing"
     - message: "✅ Settings API testing COMPLETED successfully! Tested full flow: initial empty GET, PUT save with data, GET verify persistence, PUT update with different values, and final GET to confirm merge/upsert behavior. All 5 test cases passed. Settings endpoints are working perfectly with proper MongoDB persistence and field merging."
+    - agent: "main"
+    - message: "Added archive, export, and import functionality: PUT /api/chats/{chat_id}/archive, GET /api/chats/archived, PUT /api/chats/{chat_id}/unarchive, GET /api/chats/{chat_id}/export, POST /api/chats/import, DELETE /api/chats/archived/all. Please test complete workflow."
+    - agent: "testing"
+    - message: "✅ ARCHIVE/EXPORT/IMPORT TESTING COMPLETED SUCCESSFULLY! All 6 new endpoints working perfectly. Fixed critical FastAPI routing issue where /chats/archived was conflicting with /chats/{chat_id}. Tested complete workflow: create→archive→verify exclusion from regular list→verify in archived list→unarchive→verify back in regular→export with all fields→import with messages→cleanup. All 12 test cases passed including proper cleanup and verification."
