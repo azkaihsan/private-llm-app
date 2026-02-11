@@ -156,7 +156,7 @@ function AppContent() {
   );
 
   return (
-    <div className="App flex h-screen bg-[#212121] text-white overflow-hidden">
+    <div className="App flex h-screen text-white overflow-hidden" style={{ backgroundColor: settings.mainBg, color: 'var(--text-primary)' }}>
       <Sidebar
         chats={chats}
         activeChatId={activeChatId}
@@ -166,6 +166,7 @@ function AppContent() {
         onRenameChat={renameChat}
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(false)}
+        onOpenSettings={() => setSettingsOpen(true)}
       />
 
       <div className="flex-1 flex flex-col min-w-0 relative">
