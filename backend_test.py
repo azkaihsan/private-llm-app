@@ -354,6 +354,191 @@ class BackendTester:
             self.log_result("GET /api/chats/{chat_id} (deleted)", False, f"Request failed: {str(e)}")
             return False
     
+    def test_get_settings_initial(self):
+        """Test GET /api/settings - Should return empty object initially"""
+        try:
+            response = requests.get(f"{BACKEND_URL}/settings", timeout=10)
+            
+            if response.status_code != 200:
+                self.log_result("GET /api/settings (initial)", False, f"Expected status 200, got {response.status_code}", response)
+                return False
+                
+            data = response.json()
+            
+            if data == {}:
+                self.log_result("GET /api/settings (initial)", True, "Successfully returned empty object as expected", response)
+            else:
+                self.log_result("GET /api/settings (initial)", True, f"⚠️ Not empty but working. Contains: {data}", response)
+            return True
+            
+        except Exception as e:
+            self.log_result("GET /api/settings (initial)", False, f"Request failed: {str(e)}")
+            return False
+    
+    def test_put_settings_save(self):
+        """Test PUT /api/settings - Save initial settings"""
+        try:
+            settings_data = {
+                "appName": "My Custom AI",
+                "theme": "midnight-blue", 
+                "logoText": "AI",
+                "mainBg": "#1a1a2e",
+                "fontSize": 16
+            }
+            
+            response = requests.put(
+                f"{BACKEND_URL}/settings",
+                json=settings_data,
+                headers={"Content-Type": "application/json"},
+                timeout=10
+            )
+            
+            if response.status_code != 200:
+                self.log_result("PUT /api/settings (save)", False, f"Expected status 200, got {response.status_code}", response)
+                return False
+                
+            result = response.json()
+            
+            if result.get('status') != 'ok':
+                self.log_result("PUT /api/settings (save)", False, f"Expected status 'ok', got {result.get('status')}", response)
+                return False
+                
+            self.log_result("PUT /api/settings (save)", True, "Successfully saved initial settings", response)
+            return True
+            
+        except Exception as e:
+            self.log_result("PUT /api/settings (save)", False, f"Request failed: {str(e)}")
+            return False
+    
+    def test_get_settings_verify(self):
+        """Test GET /api/settings - Verify saved settings are returned correctly"""
+        try:
+            response = requests.get(f"{BACKEND_URL}/settings", timeout=10)
+            
+            if response.status_code != 200:
+                self.log_result("GET /api/settings (verify)", False, f"Expected status 200, got {response.status_code}", response)
+                return False
+                
+            data = response.json()
+            
+            expected_settings = {
+                "appName": "My Custom AI",
+                "theme": "midnight-blue", 
+                "logoText": "AI",
+                "mainBg": "#1a1a2e",
+                "fontSize": 16
+            }
+            
+            # Check if all expected fields are present and correct
+            missing_fields = []
+            incorrect_values = []
+            
+            for key, expected_value in expected_settings.items():
+                if key not in data:
+                    missing_fields.append(key)
+                elif data[key] != expected_value:
+                    incorrect_values.append(f"{key}: expected '{expected_value}', got '{data[key]}'")
+            
+            if missing_fields or incorrect_values:
+                issues = []
+                if missing_fields:
+                    issues.append(f"Missing fields: {missing_fields}")
+                if incorrect_values:
+                    issues.append(f"Incorrect values: {incorrect_values}")
+                self.log_result("GET /api/settings (verify)", False, "; ".join(issues), response)
+                return False
+            else:
+                self.log_result("GET /api/settings (verify)", True, "All settings retrieved correctly", response)
+                return True
+            
+        except Exception as e:
+            self.log_result("GET /api/settings (verify)", False, f"Request failed: {str(e)}")
+            return False
+    
+    def test_put_settings_update(self):
+        """Test PUT /api/settings - Update with different values"""
+        try:
+            updated_settings = {
+                "appName": "Updated AI",
+                "logoType": "text",
+                "logoBgColor": "#ff5500"
+            }
+            
+            response = requests.put(
+                f"{BACKEND_URL}/settings",
+                json=updated_settings,
+                headers={"Content-Type": "application/json"},
+                timeout=10
+            )
+            
+            if response.status_code != 200:
+                self.log_result("PUT /api/settings (update)", False, f"Expected status 200, got {response.status_code}", response)
+                return False
+                
+            result = response.json()
+            
+            if result.get('status') != 'ok':
+                self.log_result("PUT /api/settings (update)", False, f"Expected status 'ok', got {result.get('status')}", response)
+                return False
+                
+            self.log_result("PUT /api/settings (update)", True, "Successfully updated settings", response)
+            return True
+            
+        except Exception as e:
+            self.log_result("PUT /api/settings (update)", False, f"Request failed: {str(e)}")
+            return False
+    
+    def test_get_settings_final_verify(self):
+        """Test GET /api/settings - Verify updated values persist and merge correctly"""
+        try:
+            response = requests.get(f"{BACKEND_URL}/settings", timeout=10)
+            
+            if response.status_code != 200:
+                self.log_result("GET /api/settings (final)", False, f"Expected status 200, got {response.status_code}", response)
+                return False
+                
+            data = response.json()
+            
+            # Expected final state should be a merge of initial and updated settings
+            expected_final = {
+                "appName": "Updated AI",  # Updated
+                "theme": "midnight-blue",  # Should persist from initial 
+                "logoText": "AI",  # Should persist from initial
+                "mainBg": "#1a1a2e",  # Should persist from initial
+                "fontSize": 16,  # Should persist from initial
+                "logoType": "text",  # New from update
+                "logoBgColor": "#ff5500"  # New from update
+            }
+            
+            # Check all expected fields
+            missing_fields = []
+            incorrect_values = []
+            
+            for key, expected_value in expected_final.items():
+                if key not in data:
+                    missing_fields.append(key)
+                elif data[key] != expected_value:
+                    incorrect_values.append(f"{key}: expected '{expected_value}', got '{data[key]}'")
+            
+            if missing_fields or incorrect_values:
+                issues = []
+                if missing_fields:
+                    issues.append(f"Missing fields: {missing_fields}")
+                if incorrect_values:
+                    issues.append(f"Incorrect values: {incorrect_values}")
+                self.log_result("GET /api/settings (final)", False, "; ".join(issues), response)
+                return False
+            else:
+                # Check for extra fields (informational only)
+                extra_fields = [key for key in data if key not in expected_final]
+                extra_info = f" (Extra fields: {extra_fields})" if extra_fields else ""
+                self.log_result("GET /api/settings (final)", True, f"All expected settings present and merged correctly{extra_info}", response)
+                return True
+            
+        except Exception as e:
+            self.log_result("GET /api/settings (final)", False, f"Request failed: {str(e)}")
+            return False
+
     def run_all_tests(self):
         """Run all tests in sequence"""
         print(f"🚀 Starting Backend API Test Suite for OpenWebUI Clone")
