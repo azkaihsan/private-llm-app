@@ -51,7 +51,7 @@ const Sidebar = ({
   if (!isOpen) return null;
 
   return (
-    <div className="w-[260px] h-full bg-[#171717] flex flex-col relative shrink-0 transition-all duration-300">
+    <div className="w-[260px] h-full flex flex-col relative shrink-0 transition-all duration-300" style={{ backgroundColor: settings.sidebarBg }}>
       {/* Header */}
       <div className="flex items-center justify-between p-2 pt-3">
         <button
