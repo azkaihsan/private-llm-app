@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Backend API Test Suite for OpenWebUI Clone Chat Application
-Tests all backend endpoints in the specified sequence.
+Backend API Testing Script for OpenWebUI Clone
+Tests all backend endpoints including new archive/export/import functionality
 """
 
 import requests
@@ -9,597 +9,199 @@ import json
 import sys
 from datetime import datetime
 
-# Backend URL from frontend environment
-BACKEND_URL = "https://ui-replica-36.preview.emergentagent.com/api"
+# Use the production backend URL from frontend/.env
+BASE_URL = "https://ui-replica-36.preview.emergentagent.com/api"
 
-class BackendTester:
-    def __init__(self):
-        self.chat_id = None
-        self.results = []
-        
-    def log_result(self, test_name, success, message, response=None):
-        """Log test results with details"""
-        result = {
-            "test": test_name,
-            "success": success,
-            "message": message,
-            "timestamp": datetime.now().isoformat()
-        }
-        if response:
-            result["status_code"] = response.status_code if hasattr(response, 'status_code') else 'N/A'
-            try:
-                result["response_data"] = response.json() if hasattr(response, 'json') else str(response)
-            except:
-                result["response_data"] = str(response)
-        
-        self.results.append(result)
-        status = "✅ PASS" if success else "❌ FAIL"
-        print(f"{status} {test_name}: {message}")
-        
-    def test_get_models(self):
-        """Test GET /api/models - Should return list of 8 AI models"""
-        try:
-            response = requests.get(f"{BACKEND_URL}/models", timeout=10)
-            
-            if response.status_code != 200:
-                self.log_result("GET /api/models", False, f"Expected status 200, got {response.status_code}", response)
-                return False
-                
-            models = response.json()
-            
-            if not isinstance(models, list):
-                self.log_result("GET /api/models", False, f"Expected list, got {type(models)}", response)
-                return False
-                
-            if len(models) != 8:
-                self.log_result("GET /api/models", False, f"Expected 8 models, got {len(models)}", response)
-                return False
-                
-            # Check required fields
-            for model in models:
-                if not all(field in model for field in ['id', 'name', 'provider']):
-                    self.log_result("GET /api/models", False, f"Model missing required fields: {model}", response)
-                    return False
-                    
-            self.log_result("GET /api/models", True, f"Successfully returned {len(models)} models with correct structure", response)
-            return True
-            
-        except Exception as e:
-            self.log_result("GET /api/models", False, f"Request failed: {str(e)}")
-            return False
-    
-    def test_create_chat(self):
-        """Test POST /api/chats - Create new chat"""
-        try:
-            chat_data = {"title": "Test Chat", "model": "gpt-4o"}
-            response = requests.post(f"{BACKEND_URL}/chats", json=chat_data, timeout=10)
-            
-            if response.status_code != 200:
-                self.log_result("POST /api/chats", False, f"Expected status 200, got {response.status_code}", response)
-                return False
-                
-            chat = response.json()
-            
-            # Check required fields
-            required_fields = ['id', 'title', 'model', 'created_at']
-            for field in required_fields:
-                if field not in chat:
-                    self.log_result("POST /api/chats", False, f"Response missing required field: {field}", response)
-                    return False
-                    
-            if chat['title'] != "Test Chat" or chat['model'] != "gpt-4o":
-                self.log_result("POST /api/chats", False, f"Chat data mismatch: title='{chat.get('title')}', model='{chat.get('model')}'", response)
-                return False
-                
-            # Save chat ID for subsequent tests
-            self.chat_id = chat['id']
-            self.log_result("POST /api/chats", True, f"Successfully created chat with ID: {self.chat_id}", response)
-            return True
-            
-        except Exception as e:
-            self.log_result("POST /api/chats", False, f"Request failed: {str(e)}")
-            return False
-    
-    def test_get_chats(self):
-        """Test GET /api/chats - Get list of all chats"""
-        try:
-            response = requests.get(f"{BACKEND_URL}/chats", timeout=10)
-            
-            if response.status_code != 200:
-                self.log_result("GET /api/chats", False, f"Expected status 200, got {response.status_code}", response)
-                return False
-                
-            chats = response.json()
-            
-            if not isinstance(chats, list):
-                self.log_result("GET /api/chats", False, f"Expected list, got {type(chats)}", response)
-                return False
-                
-            # Should contain at least our created chat
-            if len(chats) == 0:
-                self.log_result("GET /api/chats", False, "No chats returned", response)
-                return False
-                
-            # Check if our chat is in the list
-            chat_found = any(chat.get('id') == self.chat_id for chat in chats)
-            if not chat_found:
-                self.log_result("GET /api/chats", False, f"Created chat {self.chat_id} not found in chat list", response)
-                return False
-                
-            # Check sorting (should be by created_at desc)
-            if len(chats) > 1:
-                for i in range(len(chats) - 1):
-                    if chats[i].get('created_at', '') < chats[i + 1].get('created_at', ''):
-                        self.log_result("GET /api/chats", False, "Chats not sorted by created_at desc", response)
-                        return False
-                        
-            self.log_result("GET /api/chats", True, f"Successfully returned {len(chats)} chats, properly sorted", response)
-            return True
-            
-        except Exception as e:
-            self.log_result("GET /api/chats", False, f"Request failed: {str(e)}")
-            return False
-    
-    def test_get_chat_by_id(self):
-        """Test GET /api/chats/{chat_id} - Get specific chat with messages"""
-        if not self.chat_id:
-            self.log_result("GET /api/chats/{chat_id}", False, "No chat_id available from previous test")
-            return False
-            
-        try:
-            response = requests.get(f"{BACKEND_URL}/chats/{self.chat_id}", timeout=10)
-            
-            if response.status_code != 200:
-                self.log_result("GET /api/chats/{chat_id}", False, f"Expected status 200, got {response.status_code}", response)
-                return False
-                
-            chat = response.json()
-            
-            # Check required fields
-            required_fields = ['id', 'title', 'model', 'created_at', 'messages']
-            for field in required_fields:
-                if field not in chat:
-                    self.log_result("GET /api/chats/{chat_id}", False, f"Response missing required field: {field}", response)
-                    return False
-                    
-            if chat['id'] != self.chat_id:
-                self.log_result("GET /api/chats/{chat_id}", False, f"Chat ID mismatch: expected {self.chat_id}, got {chat['id']}", response)
-                return False
-                
-            if not isinstance(chat['messages'], list):
-                self.log_result("GET /api/chats/{chat_id}", False, f"Messages should be a list, got {type(chat['messages'])}", response)
-                return False
-                
-            # Should be empty initially
-            if len(chat['messages']) != 0:
-                self.log_result("GET /api/chats/{chat_id}", False, f"Expected empty messages array, got {len(chat['messages'])} messages", response)
-                return False
-                
-            self.log_result("GET /api/chats/{chat_id}", True, f"Successfully retrieved chat with empty messages array", response)
-            return True
-            
-        except Exception as e:
-            self.log_result("GET /api/chats/{chat_id}", False, f"Request failed: {str(e)}")
-            return False
-    
-    def test_rename_chat(self):
-        """Test PUT /api/chats/{chat_id} - Rename chat"""
-        if not self.chat_id:
-            self.log_result("PUT /api/chats/{chat_id}", False, "No chat_id available from previous test")
-            return False
-            
-        try:
-            rename_data = {"title": "Renamed Chat"}
-            response = requests.put(f"{BACKEND_URL}/chats/{self.chat_id}", json=rename_data, timeout=10)
-            
-            if response.status_code != 200:
-                self.log_result("PUT /api/chats/{chat_id}", False, f"Expected status 200, got {response.status_code}", response)
-                return False
-                
-            result = response.json()
-            
-            if result.get('status') != 'ok':
-                self.log_result("PUT /api/chats/{chat_id}", False, f"Expected status 'ok', got {result.get('status')}", response)
-                return False
-                
-            # Verify the rename by fetching the chat again
-            get_response = requests.get(f"{BACKEND_URL}/chats/{self.chat_id}", timeout=10)
-            if get_response.status_code == 200:
-                updated_chat = get_response.json()
-                if updated_chat.get('title') != "Renamed Chat":
-                    self.log_result("PUT /api/chats/{chat_id}", False, f"Title not updated. Expected 'Renamed Chat', got '{updated_chat.get('title')}'", response)
-                    return False
-                    
-            self.log_result("PUT /api/chats/{chat_id}", True, "Successfully renamed chat", response)
-            return True
-            
-        except Exception as e:
-            self.log_result("PUT /api/chats/{chat_id}", False, f"Request failed: {str(e)}")
-            return False
-    
-    def test_send_message(self):
-        """Test POST /api/chats/{chat_id}/messages - Send message and get AI response"""
-        if not self.chat_id:
-            self.log_result("POST /api/chats/{chat_id}/messages", False, "No chat_id available from previous test")
-            return False
-            
-        try:
-            message_data = {"content": "What is 2+2? Answer briefly."}
-            print(f"Sending message to LLM... (this may take a few seconds)")
-            response = requests.post(f"{BACKEND_URL}/chats/{self.chat_id}/messages", json=message_data, timeout=60)
-            
-            if response.status_code != 200:
-                self.log_result("POST /api/chats/{chat_id}/messages", False, f"Expected status 200, got {response.status_code}", response)
-                return False
-                
-            result = response.json()
-            
-            # Check required fields
-            if 'user_message' not in result or 'assistant_message' not in result:
-                self.log_result("POST /api/chats/{chat_id}/messages", False, "Response missing user_message or assistant_message", response)
-                return False
-                
-            user_msg = result['user_message']
-            ai_msg = result['assistant_message']
-            
-            # Check user message
-            required_user_fields = ['id', 'chat_id', 'role', 'content', 'timestamp']
-            for field in required_user_fields:
-                if field not in user_msg:
-                    self.log_result("POST /api/chats/{chat_id}/messages", False, f"User message missing field: {field}", response)
-                    return False
-                    
-            if user_msg['role'] != 'user' or user_msg['content'] != message_data['content']:
-                self.log_result("POST /api/chats/{chat_id}/messages", False, "User message content/role incorrect", response)
-                return False
-                
-            # Check assistant message
-            required_ai_fields = ['id', 'chat_id', 'role', 'content', 'timestamp']
-            for field in required_ai_fields:
-                if field not in ai_msg:
-                    self.log_result("POST /api/chats/{chat_id}/messages", False, f"Assistant message missing field: {field}", response)
-                    return False
-                    
-            if ai_msg['role'] != 'assistant' or not ai_msg['content']:
-                self.log_result("POST /api/chats/{chat_id}/messages", False, "Assistant message role/content incorrect", response)
-                return False
-                
-            self.log_result("POST /api/chats/{chat_id}/messages", True, f"Successfully sent message and received AI response: {ai_msg['content'][:50]}...", response)
-            return True
-            
-        except Exception as e:
-            self.log_result("POST /api/chats/{chat_id}/messages", False, f"Request failed: {str(e)}")
-            return False
-    
-    def test_get_chat_with_messages(self):
-        """Test GET /api/chats/{chat_id} - Verify chat now has messages"""
-        if not self.chat_id:
-            self.log_result("GET /api/chats/{chat_id} (with messages)", False, "No chat_id available from previous test")
-            return False
-            
-        try:
-            response = requests.get(f"{BACKEND_URL}/chats/{self.chat_id}", timeout=10)
-            
-            if response.status_code != 200:
-                self.log_result("GET /api/chats/{chat_id} (with messages)", False, f"Expected status 200, got {response.status_code}", response)
-                return False
-                
-            chat = response.json()
-            
-            if 'messages' not in chat:
-                self.log_result("GET /api/chats/{chat_id} (with messages)", False, "Response missing messages field", response)
-                return False
-                
-            messages = chat['messages']
-            
-            if len(messages) != 2:
-                self.log_result("GET /api/chats/{chat_id} (with messages)", False, f"Expected 2 messages (user + assistant), got {len(messages)}", response)
-                return False
-                
-            # Check message order (should be user first, then assistant)
-            if messages[0]['role'] != 'user' or messages[1]['role'] != 'assistant':
-                self.log_result("GET /api/chats/{chat_id} (with messages)", False, f"Message roles incorrect: {[m['role'] for m in messages]}", response)
-                return False
-                
-            self.log_result("GET /api/chats/{chat_id} (with messages)", True, f"Chat successfully contains {len(messages)} messages in correct order", response)
-            return True
-            
-        except Exception as e:
-            self.log_result("GET /api/chats/{chat_id} (with messages)", False, f"Request failed: {str(e)}")
-            return False
-    
-    def test_delete_chat(self):
-        """Test DELETE /api/chats/{chat_id} - Delete chat"""
-        if not self.chat_id:
-            self.log_result("DELETE /api/chats/{chat_id}", False, "No chat_id available from previous test")
-            return False
-            
-        try:
-            response = requests.delete(f"{BACKEND_URL}/chats/{self.chat_id}", timeout=10)
-            
-            if response.status_code != 200:
-                self.log_result("DELETE /api/chats/{chat_id}", False, f"Expected status 200, got {response.status_code}", response)
-                return False
-                
-            result = response.json()
-            
-            if result.get('status') != 'ok':
-                self.log_result("DELETE /api/chats/{chat_id}", False, f"Expected status 'ok', got {result.get('status')}", response)
-                return False
-                
-            self.log_result("DELETE /api/chats/{chat_id}", True, "Successfully deleted chat", response)
-            return True
-            
-        except Exception as e:
-            self.log_result("DELETE /api/chats/{chat_id}", False, f"Request failed: {str(e)}")
-            return False
-    
-    def test_get_deleted_chat(self):
-        """Test GET /api/chats/{chat_id} - Verify chat is deleted (should return 404)"""
-        if not self.chat_id:
-            self.log_result("GET /api/chats/{chat_id} (deleted)", False, "No chat_id available from previous test")
-            return False
-            
-        try:
-            response = requests.get(f"{BACKEND_URL}/chats/{self.chat_id}", timeout=10)
-            
-            if response.status_code != 404:
-                self.log_result("GET /api/chats/{chat_id} (deleted)", False, f"Expected status 404, got {response.status_code}", response)
-                return False
-                
-            self.log_result("GET /api/chats/{chat_id} (deleted)", True, "Correctly returned 404 for deleted chat", response)
-            return True
-            
-        except Exception as e:
-            self.log_result("GET /api/chats/{chat_id} (deleted)", False, f"Request failed: {str(e)}")
-            return False
-    
-    def test_get_settings_initial(self):
-        """Test GET /api/settings - Should return empty object initially"""
-        try:
-            response = requests.get(f"{BACKEND_URL}/settings", timeout=10)
-            
-            if response.status_code != 200:
-                self.log_result("GET /api/settings (initial)", False, f"Expected status 200, got {response.status_code}", response)
-                return False
-                
-            data = response.json()
-            
-            if data == {}:
-                self.log_result("GET /api/settings (initial)", True, "Successfully returned empty object as expected", response)
-            else:
-                self.log_result("GET /api/settings (initial)", True, f"⚠️ Not empty but working. Contains: {data}", response)
-            return True
-            
-        except Exception as e:
-            self.log_result("GET /api/settings (initial)", False, f"Request failed: {str(e)}")
-            return False
-    
-    def test_put_settings_save(self):
-        """Test PUT /api/settings - Save initial settings"""
-        try:
-            settings_data = {
-                "appName": "My Custom AI",
-                "theme": "midnight-blue", 
-                "logoText": "AI",
-                "mainBg": "#1a1a2e",
-                "fontSize": 16
-            }
-            
-            response = requests.put(
-                f"{BACKEND_URL}/settings",
-                json=settings_data,
-                headers={"Content-Type": "application/json"},
-                timeout=10
-            )
-            
-            if response.status_code != 200:
-                self.log_result("PUT /api/settings (save)", False, f"Expected status 200, got {response.status_code}", response)
-                return False
-                
-            result = response.json()
-            
-            if result.get('status') != 'ok':
-                self.log_result("PUT /api/settings (save)", False, f"Expected status 'ok', got {result.get('status')}", response)
-                return False
-                
-            self.log_result("PUT /api/settings (save)", True, "Successfully saved initial settings", response)
-            return True
-            
-        except Exception as e:
-            self.log_result("PUT /api/settings (save)", False, f"Request failed: {str(e)}")
-            return False
-    
-    def test_get_settings_verify(self):
-        """Test GET /api/settings - Verify saved settings are returned correctly"""
-        try:
-            response = requests.get(f"{BACKEND_URL}/settings", timeout=10)
-            
-            if response.status_code != 200:
-                self.log_result("GET /api/settings (verify)", False, f"Expected status 200, got {response.status_code}", response)
-                return False
-                
-            data = response.json()
-            
-            expected_settings = {
-                "appName": "My Custom AI",
-                "theme": "midnight-blue", 
-                "logoText": "AI",
-                "mainBg": "#1a1a2e",
-                "fontSize": 16
-            }
-            
-            # Check if all expected fields are present and correct
-            missing_fields = []
-            incorrect_values = []
-            
-            for key, expected_value in expected_settings.items():
-                if key not in data:
-                    missing_fields.append(key)
-                elif data[key] != expected_value:
-                    incorrect_values.append(f"{key}: expected '{expected_value}', got '{data[key]}'")
-            
-            if missing_fields or incorrect_values:
-                issues = []
-                if missing_fields:
-                    issues.append(f"Missing fields: {missing_fields}")
-                if incorrect_values:
-                    issues.append(f"Incorrect values: {incorrect_values}")
-                self.log_result("GET /api/settings (verify)", False, "; ".join(issues), response)
-                return False
-            else:
-                self.log_result("GET /api/settings (verify)", True, "All settings retrieved correctly", response)
-                return True
-            
-        except Exception as e:
-            self.log_result("GET /api/settings (verify)", False, f"Request failed: {str(e)}")
-            return False
-    
-    def test_put_settings_update(self):
-        """Test PUT /api/settings - Update with different values"""
-        try:
-            updated_settings = {
-                "appName": "Updated AI",
-                "logoType": "text",
-                "logoBgColor": "#ff5500"
-            }
-            
-            response = requests.put(
-                f"{BACKEND_URL}/settings",
-                json=updated_settings,
-                headers={"Content-Type": "application/json"},
-                timeout=10
-            )
-            
-            if response.status_code != 200:
-                self.log_result("PUT /api/settings (update)", False, f"Expected status 200, got {response.status_code}", response)
-                return False
-                
-            result = response.json()
-            
-            if result.get('status') != 'ok':
-                self.log_result("PUT /api/settings (update)", False, f"Expected status 'ok', got {result.get('status')}", response)
-                return False
-                
-            self.log_result("PUT /api/settings (update)", True, "Successfully updated settings", response)
-            return True
-            
-        except Exception as e:
-            self.log_result("PUT /api/settings (update)", False, f"Request failed: {str(e)}")
-            return False
-    
-    def test_get_settings_final_verify(self):
-        """Test GET /api/settings - Verify updated values persist and merge correctly"""
-        try:
-            response = requests.get(f"{BACKEND_URL}/settings", timeout=10)
-            
-            if response.status_code != 200:
-                self.log_result("GET /api/settings (final)", False, f"Expected status 200, got {response.status_code}", response)
-                return False
-                
-            data = response.json()
-            
-            # Expected final state should be a merge of initial and updated settings
-            expected_final = {
-                "appName": "Updated AI",  # Updated
-                "theme": "midnight-blue",  # Should persist from initial 
-                "logoText": "AI",  # Should persist from initial
-                "mainBg": "#1a1a2e",  # Should persist from initial
-                "fontSize": 16,  # Should persist from initial
-                "logoType": "text",  # New from update
-                "logoBgColor": "#ff5500"  # New from update
-            }
-            
-            # Check all expected fields
-            missing_fields = []
-            incorrect_values = []
-            
-            for key, expected_value in expected_final.items():
-                if key not in data:
-                    missing_fields.append(key)
-                elif data[key] != expected_value:
-                    incorrect_values.append(f"{key}: expected '{expected_value}', got '{data[key]}'")
-            
-            if missing_fields or incorrect_values:
-                issues = []
-                if missing_fields:
-                    issues.append(f"Missing fields: {missing_fields}")
-                if incorrect_values:
-                    issues.append(f"Incorrect values: {incorrect_values}")
-                self.log_result("GET /api/settings (final)", False, "; ".join(issues), response)
-                return False
-            else:
-                # Check for extra fields (informational only)
-                extra_fields = [key for key in data if key not in expected_final]
-                extra_info = f" (Extra fields: {extra_fields})" if extra_fields else ""
-                self.log_result("GET /api/settings (final)", True, f"All expected settings present and merged correctly{extra_info}", response)
-                return True
-            
-        except Exception as e:
-            self.log_result("GET /api/settings (final)", False, f"Request failed: {str(e)}")
-            return False
+def print_test(title):
+    print(f"\n{'='*60}")
+    print(f"TEST: {title}")
+    print('='*60)
 
-    def run_all_tests(self):
-        """Run all tests in sequence"""
-        print(f"🚀 Starting Backend API Test Suite for OpenWebUI Clone")
-        print(f"📡 Testing backend URL: {BACKEND_URL}")
-        print("=" * 60)
-        
-        tests = [
-            ("1. GET /api/models", self.test_get_models),
-            ("2. POST /api/chats", self.test_create_chat),
-            ("3. GET /api/chats", self.test_get_chats),
-            ("4. GET /api/chats/{chat_id}", self.test_get_chat_by_id),
-            ("5. PUT /api/chats/{chat_id}", self.test_rename_chat),
-            ("6. POST /api/chats/{chat_id}/messages", self.test_send_message),
-            ("7. GET /api/chats/{chat_id} (with messages)", self.test_get_chat_with_messages),
-            ("8. DELETE /api/chats/{chat_id}", self.test_delete_chat),
-            ("9. GET /api/chats/{chat_id} (deleted)", self.test_get_deleted_chat),
-            ("10. GET /api/settings (initial)", self.test_get_settings_initial),
-            ("11. PUT /api/settings (save)", self.test_put_settings_save),
-            ("12. GET /api/settings (verify)", self.test_get_settings_verify),
-            ("13. PUT /api/settings (update)", self.test_put_settings_update),
-            ("14. GET /api/settings (final)", self.test_get_settings_final_verify)
+def print_result(success, message, response=None):
+    status = "✅ PASS" if success else "❌ FAIL"
+    print(f"{status}: {message}")
+    if response and hasattr(response, 'text'):
+        print(f"Response: {response.text[:200]}...")
+    elif response:
+        print(f"Response: {str(response)[:200]}...")
+
+def test_archive_export_import_flow():
+    """Test the complete archive, export, and import workflow"""
+    
+    # Test data
+    test_chat_data = {
+        "title": "Test Export Chat",
+        "model": "gpt-4o"
+    }
+    
+    import_chat_data = {
+        "version": "1.0",
+        "chat": {
+            "title": "Imported Test",
+            "model": "gpt-4o"
+        },
+        "messages": [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi there!"}
         ]
-        
-        passed = 0
-        total = len(tests)
-        
-        for test_name, test_func in tests:
-            print(f"\n🧪 Running {test_name}...")
-            if test_func():
-                passed += 1
-            else:
-                print(f"   ⚠️  Test failed, but continuing with remaining tests...")
-        
-        print("\n" + "=" * 60)
-        print(f"📊 TEST SUMMARY: {passed}/{total} tests passed")
-        
-        if passed == total:
-            print("🎉 All tests PASSED! Backend API is working correctly.")
-            return True
+    }
+    
+    chat_id = None
+    imported_chat_id = None
+    
+    try:
+        # 1. Create a test chat
+        print_test("1. POST /api/chats - Create test chat")
+        response = requests.post(f"{BASE_URL}/chats", json=test_chat_data, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            chat_id = data.get('id')
+            print_result(True, f"Chat created with ID: {chat_id}", data)
         else:
-            print(f"❌ {total - passed} tests FAILED. See details above.")
+            print_result(False, f"Failed to create chat. Status: {response.status_code}", response)
             return False
+            
+        # 2. Archive the chat
+        print_test(f"2. PUT /api/chats/{chat_id}/archive - Archive the chat")
+        response = requests.put(f"{BASE_URL}/chats/{chat_id}/archive", timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            expected_response = data.get('status') == 'ok'
+            print_result(expected_response, f"Chat archived successfully", data)
+        else:
+            print_result(False, f"Failed to archive chat. Status: {response.status_code}", response)
+            return False
+            
+        # 3. Verify chat is NOT in regular list
+        print_test("3. GET /api/chats - Verify archived chat not in regular list")
+        response = requests.get(f"{BASE_URL}/chats", timeout=10)
+        if response.status_code == 200:
+            chats = response.json()
+            chat_in_regular = any(chat.get('id') == chat_id for chat in chats)
+            print_result(not chat_in_regular, f"Archived chat correctly excluded from regular list. Found {len(chats)} chats", chats)
+        else:
+            print_result(False, f"Failed to get chats. Status: {response.status_code}", response)
+            return False
+            
+        # 4. Verify chat appears in archived list
+        print_test("4. GET /api/chats/archived - Verify chat in archived list")
+        response = requests.get(f"{BASE_URL}/chats/archived", timeout=10)
+        if response.status_code == 200:
+            archived_chats = response.json()
+            chat_in_archived = any(chat.get('id') == chat_id for chat in archived_chats)
+            print_result(chat_in_archived, f"Chat found in archived list. Found {len(archived_chats)} archived chats", archived_chats)
+        else:
+            print_result(False, f"Failed to get archived chats. Status: {response.status_code}", response)
+            return False
+            
+        # 5. Unarchive the chat
+        print_test(f"5. PUT /api/chats/{chat_id}/unarchive - Unarchive the chat")
+        response = requests.put(f"{BASE_URL}/chats/{chat_id}/unarchive", timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            expected_response = data.get('status') == 'ok'
+            print_result(expected_response, f"Chat unarchived successfully", data)
+        else:
+            print_result(False, f"Failed to unarchive chat. Status: {response.status_code}", response)
+            return False
+            
+        # 6. Verify chat is back in regular list
+        print_test("6. GET /api/chats - Verify chat back in regular list")
+        response = requests.get(f"{BASE_URL}/chats", timeout=10)
+        if response.status_code == 200:
+            chats = response.json()
+            chat_in_regular = any(chat.get('id') == chat_id for chat in chats)
+            print_result(chat_in_regular, f"Chat back in regular list. Found {len(chats)} total chats", f"Chat {chat_id} found: {chat_in_regular}")
+        else:
+            print_result(False, f"Failed to get chats. Status: {response.status_code}", response)
+            return False
+            
+        # 7. Export the chat
+        print_test(f"7. GET /api/chats/{chat_id}/export - Export the chat")
+        response = requests.get(f"{BASE_URL}/chats/{chat_id}/export", timeout=10)
+        if response.status_code == 200:
+            export_data = response.json()
+            required_fields = ['version', 'source', 'chat', 'messages', 'exported_at']
+            has_all_fields = all(field in export_data for field in required_fields)
+            print_result(has_all_fields, f"Export successful with all required fields", export_data)
+        else:
+            print_result(False, f"Failed to export chat. Status: {response.status_code}", response)
+            return False
+            
+        # 8. Import a chat
+        print_test("8. POST /api/chats/import - Import a new chat")
+        response = requests.post(f"{BASE_URL}/chats/import", json=import_chat_data, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            imported_chat_id = data.get('chat_id')
+            import_success = data.get('status') == 'ok' and imported_chat_id
+            print_result(import_success, f"Chat imported with ID: {imported_chat_id}", data)
+        else:
+            print_result(False, f"Failed to import chat. Status: {response.status_code}", response)
+            return False
+            
+        # 9. Verify imported chat has correct messages
+        print_test(f"9. GET /api/chats/{imported_chat_id} - Verify imported chat has 2 messages")
+        response = requests.get(f"{BASE_URL}/chats/{imported_chat_id}", timeout=10)
+        if response.status_code == 200:
+            chat_data = response.json()
+            messages = chat_data.get('messages', [])
+            has_two_messages = len(messages) == 2
+            print_result(has_two_messages, f"Imported chat has {len(messages)} messages (expected 2)", f"Messages: {messages}")
+        else:
+            print_result(False, f"Failed to get imported chat. Status: {response.status_code}", response)
+            return False
+            
+        # 10. Clean up: Archive both chats
+        print_test("10. Archive both chats for cleanup")
+        for test_id in [chat_id, imported_chat_id]:
+            if test_id:
+                response = requests.put(f"{BASE_URL}/chats/{test_id}/archive", timeout=10)
+                success = response.status_code == 200
+                print_result(success, f"Archived chat {test_id}", response.json() if success else response)
+                
+        # 11. Delete all archived chats
+        print_test("11. DELETE /api/chats/archived/all - Delete all archived chats")
+        response = requests.delete(f"{BASE_URL}/chats/archived/all", timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            delete_success = data.get('status') == 'ok'
+            deleted_count = data.get('deleted_count', 0)
+            print_result(delete_success, f"Deleted {deleted_count} archived chats", data)
+        else:
+            print_result(False, f"Failed to delete archived chats. Status: {response.status_code}", response)
+            return False
+            
+        # 12. Verify both chats are gone
+        print_test("12. Verify both test chats are completely deleted")
+        for test_id in [chat_id, imported_chat_id]:
+            if test_id:
+                response = requests.get(f"{BASE_URL}/chats/{test_id}", timeout=10)
+                is_deleted = response.status_code == 404
+                print_result(is_deleted, f"Chat {test_id} properly deleted (404 expected)", f"Status: {response.status_code}")
+                
+        print(f"\n{'='*60}")
+        print("🎉 ALL ARCHIVE/EXPORT/IMPORT TESTS COMPLETED SUCCESSFULLY!")
+        print('='*60)
+        return True
+        
+    except Exception as e:
+        print_result(False, f"Test failed with exception: {str(e)}")
+        return False
 
 def main():
-    tester = BackendTester()
-    success = tester.run_all_tests()
+    print("🚀 Starting Backend API Tests for Archive/Export/Import Features")
+    print(f"Backend URL: {BASE_URL}")
+    print(f"Test Time: {datetime.now().isoformat()}")
     
-    # Print detailed results
-    print("\n" + "=" * 60)
-    print("📋 DETAILED TEST RESULTS:")
-    print("=" * 60)
+    success = test_archive_export_import_flow()
     
-    for result in tester.results:
-        status = "✅" if result['success'] else "❌"
-        print(f"{status} {result['test']}")
-        print(f"   📝 {result['message']}")
-        if 'status_code' in result:
-            print(f"   🔗 HTTP {result['status_code']}")
-        print()
-    
-    return 0 if success else 1
+    if success:
+        print("\n✅ All tests passed!")
+        sys.exit(0)
+    else:
+        print("\n❌ Some tests failed!")
+        sys.exit(1)
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
