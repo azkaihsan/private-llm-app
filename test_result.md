@@ -283,27 +283,32 @@ frontend:
         - agent: "main"
         - comment: "App.js now fetches models and chats from API, sends messages to backend LLM"
 
+  - task: "Settings Modal with logo & theme customization"
+    implemented: true
+    working: "NA"
+    file: "src/components/SettingsModal.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "Settings modal with General, Theme, System Prompt tabs"
+
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 2
+  test_sequence: 3
   run_ui: false
 
 test_plan:
   current_focus:
-    - "GET /api/models"
-    - "POST /api/chats"
-    - "GET /api/chats"
-    - "GET /api/chats/{chat_id}"
-    - "PUT /api/chats/{chat_id}"
-    - "DELETE /api/chats/{chat_id}"
-    - "POST /api/chats/{chat_id}/messages"
+    - "GET /api/settings"
+    - "PUT /api/settings"
   stuck_tasks: []
-  test_all: true
+  test_all: false
   test_priority: "high_first"
 
 agent_communication:
     - agent: "main"
-    - message: "All backend endpoints implemented with MongoDB and emergentintegrations LLM. Please test all CRUD endpoints and the message sending endpoint. The LLM uses EMERGENT_LLM_KEY with provider/model mapping. Test flow: create chat -> send message -> verify AI response -> list chats -> get chat -> rename -> delete."
-    - agent: "testing"
-    - message: "✅ Backend testing COMPLETE! All 9 API endpoints tested successfully. Fixed critical router registration issue (routes were defined after router inclusion). Minor fixes: removed quotes from .env file, fixed logger usage before definition. LLM integration working properly with real AI responses. All CRUD operations, sorting, validation, and error handling verified. Ready for production use!"
+    - message: "Added settings endpoints (GET/PUT /api/settings) for persisting app customization. Please test: 1) PUT settings with body like {appName: 'Test', theme: 'midnight-blue'}, 2) GET settings to verify persistence, 3) PUT again with different values, 4) Verify update works."
