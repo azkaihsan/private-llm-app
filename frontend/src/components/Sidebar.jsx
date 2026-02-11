@@ -277,8 +277,8 @@ const Sidebar = ({
                               </>
                             )}
                         </div>
-                      ) : null}
-                    </>
+                      )}
+                    </div>
                   )}
                 </div>
               ))}
