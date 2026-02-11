@@ -5,7 +5,6 @@ import {
   SquarePen, EllipsisVertical, X, Archive, ChevronDown,
   Download, Upload, ArchiveRestore, MoreHorizontal, ArrowLeft
 } from 'lucide-react';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { useSettings } from '@/context/SettingsContext';
 
 const Sidebar = ({
