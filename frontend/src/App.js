@@ -24,6 +24,7 @@ function AppContent() {
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [modelSearch, setModelSearch] = useState("");
   const [activeMessages, setActiveMessages] = useState([]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Fetch models on mount
   useEffect(() => {
