@@ -274,7 +274,6 @@ const Sidebar = ({
                                 </div>
                               </>
                             )}
-                          </div>
                         </div>
                       )}
                     </>
