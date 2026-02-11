@@ -196,6 +196,9 @@ async def send_message(chat_id: str, data: MessageCreate):
         "assistant_message": {k: v for k, v in ai_msg.items() if k != "_id"},
     }
 
+# Include the router in the main app after all routes are defined
+app.include_router(api_router)
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
