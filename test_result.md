@@ -240,6 +240,78 @@ backend:
         - agent: "testing"
         - comment: "✅ PASSED: Successfully saves and updates settings. Verified merge/upsert functionality - new fields added while existing fields persist correctly"
 
+  - task: "PUT /api/chats/{chat_id}/archive - Archive chat"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+        - agent: "testing"
+        - comment: "✅ PASSED: Successfully archives chats and removes them from regular chat list. Fixed FastAPI routing conflict by moving /chats/archived before /chats/{chat_id}"
+
+  - task: "GET /api/chats/archived - List archived chats"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+        - agent: "testing"
+        - comment: "✅ PASSED: Successfully returns archived chats. Fixed FastAPI routing issue where archived was being treated as chat_id parameter"
+
+  - task: "PUT /api/chats/{chat_id}/unarchive - Unarchive chat"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+        - agent: "testing"
+        - comment: "✅ PASSED: Successfully unarchives chats and returns them to regular chat list"
+
+  - task: "GET /api/chats/{chat_id}/export - Export chat"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+        - agent: "testing"
+        - comment: "✅ PASSED: Successfully exports chat with all required fields (version, source, chat, messages, exported_at)"
+
+  - task: "POST /api/chats/import - Import chat"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+        - agent: "testing"
+        - comment: "✅ PASSED: Successfully imports chats with messages. Correctly creates new UUID and preserves message content and roles"
+
+  - task: "DELETE /api/chats/archived/all - Delete all archived chats"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+        - agent: "testing"
+        - comment: "✅ PASSED: Successfully deletes all archived chats and their associated messages. Returns correct count of deleted chats"
+
 frontend:
   - task: "Sidebar with chat list"
     implemented: true
