@@ -227,16 +227,16 @@ const Sidebar = ({
                       onClick={e => e.stopPropagation()}
                     />
                   ) : (
-                    <div className="relative overflow-hidden">
+                    <div className="relative">
                       <div className="text-sm text-neutral-200 truncate py-2 px-3 pr-9">
                         {chat.title}
                       </div>
                       {(hoveredChatId === chat.id || activeChatId === chat.id || contextMenuChat === chat.id) && (
-                        <div className="absolute right-0 top-0 bottom-0 flex items-center pr-1" style={{ zIndex: 5 }}>
+                        <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center" style={{ zIndex: 10 }}>
                           <button
                             onClick={e => { e.stopPropagation(); setContextMenuChat(contextMenuChat === chat.id ? null : chat.id); }}
-                            className="p-1.5 rounded-lg text-neutral-300 hover:text-white transition-colors"
-                            style={{ backgroundColor: activeChatId === chat.id ? '#212121' : settings.sidebarBg }}
+                            className="p-1 rounded-md text-neutral-300 hover:text-white transition-colors"
+                            style={{ backgroundColor: activeChatId === chat.id ? '#2a2a2a' : 'rgba(255,255,255,0.1)' }}
                           >
                             <MoreHorizontal size={16} />
                           </button>
