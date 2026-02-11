@@ -137,7 +137,7 @@ const Sidebar = ({
               ))
             )}
           </div>
-        </ScrollArea>
+        </div>
       </div>
     );
   }
