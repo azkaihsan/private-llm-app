@@ -18,9 +18,15 @@ const tabs = [
 ];
 
 const PROVIDER_INFO = {
-  openai: { name: 'OpenAI', color: '#10a37f', models: ['gpt-4o', 'gpt-4.1-mini', 'gpt-5.1', 'gpt-5-mini'] },
-  anthropic: { name: 'Anthropic', color: '#d4a574', models: ['claude-sonnet-4-5-20250929', 'claude-4-sonnet-20250514'] },
-  gemini: { name: 'Google Gemini', color: '#4285f4', models: ['gemini-2.5-flash', 'gemini-2.5-pro'] },
+  openai: { name: 'OpenAI', color: '#10a37f', supportsEmergent: true },
+  anthropic: { name: 'Anthropic', color: '#d4a574', supportsEmergent: true },
+  gemini: { name: 'Google Gemini', color: '#4285f4', supportsEmergent: true },
+  deepseek: { name: 'DeepSeek', color: '#4d6bfe', supportsEmergent: false },
+  qwen: { name: 'Qwen', color: '#6c5ce7', supportsEmergent: false, hasBaseUrl: true },
+  grok: { name: 'Grok (xAI)', color: '#1da1f2', supportsEmergent: false },
+  perplexity: { name: 'Perplexity', color: '#22c55e', supportsEmergent: false },
+  bedrock: { name: 'Amazon Bedrock', color: '#ff9900', supportsEmergent: false, isBedrock: true },
+  openai_compatible: { name: 'OpenAI Compatible', color: '#8b5cf6', supportsEmergent: false, hasBaseUrl: true, hasCustomModels: true },
 };
 
 const SettingsModal = ({ open, onClose, onModelsChanged }) => {
@@ -57,6 +63,12 @@ const SettingsModal = ({ open, onClose, onModelsChanged }) => {
           openai: { enabled: true, apiKey: '', name: 'OpenAI', useEmergentKey: true },
           anthropic: { enabled: true, apiKey: '', name: 'Anthropic', useEmergentKey: true },
           gemini: { enabled: true, apiKey: '', name: 'Google Gemini', useEmergentKey: true },
+          deepseek: { enabled: false, apiKey: '', name: 'DeepSeek', useEmergentKey: false, baseUrl: 'https://api.deepseek.com/v1' },
+          qwen: { enabled: false, apiKey: '', name: 'Qwen', useEmergentKey: false, baseUrl: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1' },
+          grok: { enabled: false, apiKey: '', name: 'Grok (xAI)', useEmergentKey: false, baseUrl: 'https://api.x.ai/v1' },
+          perplexity: { enabled: false, apiKey: '', name: 'Perplexity', useEmergentKey: false, baseUrl: 'https://api.perplexity.ai' },
+          bedrock: { enabled: false, apiKey: '', name: 'Amazon Bedrock', useEmergentKey: false, awsRegion: 'us-east-1', awsAccessKey: '', awsSecretKey: '' },
+          openai_compatible: { enabled: false, apiKey: '', name: 'OpenAI Compatible', useEmergentKey: false, baseUrl: '', customModels: '' },
         },
         defaultModel: 'gpt-4o',
         modelParams: { temperature: 0.7, maxTokens: 4096, topP: 1.0 },
@@ -230,9 +242,10 @@ const SettingsModal = ({ open, onClose, onModelsChanged }) => {
                   {Object.entries(PROVIDER_INFO).map(([provKey, provInfo]) => {
                     const prov = connections.providers?.[provKey] || {};
                     const isEnabled = prov.enabled !== false;
-                    const useEmergent = prov.useEmergentKey !== false;
+                    const useEmergent = prov.useEmergentKey !== false && provInfo.supportsEmergent;
                     const testResult = testResults[provKey];
                     const isTesting = testingProvider === provKey;
+                    const modelCount = allModels.filter(m => m.provider === provKey).length;
 
                     return (
                       <div key={provKey} className="rounded-xl p-4 space-y-3" style={{ backgroundColor: isLight ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)', border: `1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)'}` }}>
@@ -241,9 +254,16 @@ const SettingsModal = ({ open, onClose, onModelsChanged }) => {
                           <div className="flex items-center gap-3">
                             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: isEnabled ? provInfo.color : '#555' }} />
                             <span className="text-sm font-semibold">{provInfo.name}</span>
-                            <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)', color: mutedColor }}>
-                              {provInfo.models.length} models
-                            </span>
+                            {isEnabled && modelCount > 0 && (
+                              <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)', color: mutedColor }}>
+                                {modelCount} model{modelCount !== 1 ? 's' : ''}
+                              </span>
+                            )}
+                            {!provInfo.supportsEmergent && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(255,150,0,0.1)', color: '#f59e0b' }}>
+                                Own key required
+                              </span>
+                            )}
                           </div>
                           <button onClick={() => handleToggleProvider(provKey)} className="transition-colors" style={{ color: isEnabled ? provInfo.color : '#555' }}>
                             {isEnabled ? <ToggleRight size={28} /> : <ToggleLeft size={28} />}
@@ -252,37 +272,117 @@ const SettingsModal = ({ open, onClose, onModelsChanged }) => {
 
                         {isEnabled && (
                           <>
-                            {/* Emergent Key Toggle */}
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <Zap size={14} style={{ color: useEmergent ? '#f59e0b' : mutedColor }} />
-                                <span className="text-sm" style={{ color: labelColor }}>Use Emergent Universal Key</span>
+                            {/* Emergent Key Toggle (only for supported providers) */}
+                            {provInfo.supportsEmergent && (
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <Zap size={14} style={{ color: useEmergent ? '#f59e0b' : mutedColor }} />
+                                  <span className="text-sm" style={{ color: labelColor }}>Use Emergent Universal Key</span>
+                                </div>
+                                <button onClick={() => handleToggleEmergentKey(provKey)} className="transition-colors" style={{ color: useEmergent ? '#f59e0b' : '#555' }}>
+                                  {useEmergent ? <ToggleRight size={24} /> : <ToggleLeft size={24} />}
+                                </button>
                               </div>
-                              <button onClick={() => handleToggleEmergentKey(provKey)} className="transition-colors" style={{ color: useEmergent ? '#f59e0b' : '#555' }}>
-                                {useEmergent ? <ToggleRight size={24} /> : <ToggleLeft size={24} />}
-                              </button>
-                            </div>
+                            )}
 
-                            {/* Custom API Key */}
-                            {!useEmergent && (
+                            {/* API Key field (show for non-Emergent providers, or when Emergent key is off) */}
+                            {(!provInfo.supportsEmergent || !useEmergent) && !provInfo.isBedrock && (
                               <div>
                                 <label className="block text-xs font-medium mb-1.5" style={{ color: labelColor }}>API Key</label>
-                                <div className="flex gap-2">
-                                  <div className="relative flex-1">
+                                <div className="relative">
+                                  <input
+                                    type={showApiKeys[provKey] ? 'text' : 'password'}
+                                    value={prov.apiKey || ''}
+                                    onChange={e => handleConnectionChange(provKey, 'apiKey', e.target.value)}
+                                    placeholder={`Enter ${provInfo.name} API key...`}
+                                    className="w-full rounded-lg px-3 py-2 pr-10 text-sm outline-none"
+                                    style={inputStyle}
+                                  />
+                                  <button
+                                    onClick={() => setShowApiKeys(prev => ({ ...prev, [provKey]: !prev[provKey] }))}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1"
+                                    style={{ color: mutedColor }}
+                                  >
+                                    {showApiKeys[provKey] ? <EyeOff size={14} /> : <Eye size={14} />}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Base URL (for providers that support it) */}
+                            {provInfo.hasBaseUrl && (
+                              <div>
+                                <label className="block text-xs font-medium mb-1.5" style={{ color: labelColor }}>Base URL</label>
+                                <input
+                                  type="text"
+                                  value={prov.baseUrl || ''}
+                                  onChange={e => handleConnectionChange(provKey, 'baseUrl', e.target.value)}
+                                  placeholder="https://api.example.com/v1"
+                                  className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+                                  style={inputStyle}
+                                />
+                              </div>
+                            )}
+
+                            {/* Custom Models (for OpenAI Compatible) */}
+                            {provInfo.hasCustomModels && (
+                              <div>
+                                <label className="block text-xs font-medium mb-1.5" style={{ color: labelColor }}>Model Names</label>
+                                <input
+                                  type="text"
+                                  value={prov.customModels || ''}
+                                  onChange={e => handleConnectionChange(provKey, 'customModels', e.target.value)}
+                                  placeholder="model-1, model-2, model-3"
+                                  className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+                                  style={inputStyle}
+                                />
+                                <p className="text-xs mt-1" style={{ color: mutedColor }}>Comma-separated list of model names available at this endpoint.</p>
+                              </div>
+                            )}
+
+                            {/* AWS Bedrock credentials */}
+                            {provInfo.isBedrock && (
+                              <div className="space-y-3">
+                                <div>
+                                  <label className="block text-xs font-medium mb-1.5" style={{ color: labelColor }}>AWS Region</label>
+                                  <input
+                                    type="text"
+                                    value={prov.awsRegion || 'us-east-1'}
+                                    onChange={e => handleConnectionChange(provKey, 'awsRegion', e.target.value)}
+                                    placeholder="us-east-1"
+                                    className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+                                    style={inputStyle}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium mb-1.5" style={{ color: labelColor }}>AWS Access Key ID</label>
+                                  <div className="relative">
                                     <input
-                                      type={showApiKeys[provKey] ? 'text' : 'password'}
-                                      value={prov.apiKey || ''}
-                                      onChange={e => handleConnectionChange(provKey, 'apiKey', e.target.value)}
-                                      placeholder={`Enter ${provInfo.name} API key...`}
+                                      type={showApiKeys[`${provKey}_access`] ? 'text' : 'password'}
+                                      value={prov.awsAccessKey || ''}
+                                      onChange={e => handleConnectionChange(provKey, 'awsAccessKey', e.target.value)}
+                                      placeholder="AKIA..."
                                       className="w-full rounded-lg px-3 py-2 pr-10 text-sm outline-none"
                                       style={inputStyle}
                                     />
-                                    <button
-                                      onClick={() => setShowApiKeys(prev => ({ ...prev, [provKey]: !prev[provKey] }))}
-                                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1"
-                                      style={{ color: mutedColor }}
-                                    >
-                                      {showApiKeys[provKey] ? <EyeOff size={14} /> : <Eye size={14} />}
+                                    <button onClick={() => setShowApiKeys(prev => ({ ...prev, [`${provKey}_access`]: !prev[`${provKey}_access`] }))} className="absolute right-2 top-1/2 -translate-y-1/2 p-1" style={{ color: mutedColor }}>
+                                      {showApiKeys[`${provKey}_access`] ? <EyeOff size={14} /> : <Eye size={14} />}
+                                    </button>
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium mb-1.5" style={{ color: labelColor }}>AWS Secret Access Key</label>
+                                  <div className="relative">
+                                    <input
+                                      type={showApiKeys[`${provKey}_secret`] ? 'text' : 'password'}
+                                      value={prov.awsSecretKey || ''}
+                                      onChange={e => handleConnectionChange(provKey, 'awsSecretKey', e.target.value)}
+                                      placeholder="Enter AWS secret key..."
+                                      className="w-full rounded-lg px-3 py-2 pr-10 text-sm outline-none"
+                                      style={inputStyle}
+                                    />
+                                    <button onClick={() => setShowApiKeys(prev => ({ ...prev, [`${provKey}_secret`]: !prev[`${provKey}_secret`] }))} className="absolute right-2 top-1/2 -translate-y-1/2 p-1" style={{ color: mutedColor }}>
+                                      {showApiKeys[`${provKey}_secret`] ? <EyeOff size={14} /> : <Eye size={14} />}
                                     </button>
                                   </div>
                                 </div>

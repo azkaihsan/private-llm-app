@@ -10,6 +10,7 @@ from typing import List, Optional
 import uuid
 from datetime import datetime, timezone
 from emergentintegrations.llm.chat import LlmChat, UserMessage
+import litellm
 
 
 ROOT_DIR = Path(__file__).parent
@@ -85,6 +86,41 @@ ALL_MODELS = {
         {"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash", "provider": "gemini"},
         {"id": "gemini-2.5-pro", "name": "Gemini 2.5 Pro", "provider": "gemini"},
     ],
+    "deepseek": [
+        {"id": "deepseek/deepseek-chat", "name": "DeepSeek V3", "provider": "deepseek"},
+        {"id": "deepseek/deepseek-reasoner", "name": "DeepSeek R1", "provider": "deepseek"},
+    ],
+    "qwen": [
+        {"id": "openai/qwen-max", "name": "Qwen Max", "provider": "qwen"},
+        {"id": "openai/qwen-plus", "name": "Qwen Plus", "provider": "qwen"},
+        {"id": "openai/qwen-turbo", "name": "Qwen Turbo", "provider": "qwen"},
+    ],
+    "grok": [
+        {"id": "xai/grok-3", "name": "Grok 3", "provider": "grok"},
+        {"id": "xai/grok-3-mini", "name": "Grok 3 Mini", "provider": "grok"},
+    ],
+    "perplexity": [
+        {"id": "perplexity/sonar-pro", "name": "Sonar Pro", "provider": "perplexity"},
+        {"id": "perplexity/sonar", "name": "Sonar", "provider": "perplexity"},
+        {"id": "perplexity/sonar-reasoning-pro", "name": "Sonar Reasoning Pro", "provider": "perplexity"},
+    ],
+    "bedrock": [
+        {"id": "bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0", "name": "Claude 3.5 Sonnet (Bedrock)", "provider": "bedrock"},
+        {"id": "bedrock/amazon.nova-pro-v1:0", "name": "Amazon Nova Pro", "provider": "bedrock"},
+        {"id": "bedrock/amazon.nova-lite-v1:0", "name": "Amazon Nova Lite", "provider": "bedrock"},
+    ],
+    "openai_compatible": [],
+}
+
+# Providers that use Emergent key (only openai, anthropic, gemini)
+EMERGENT_PROVIDERS = {"openai", "anthropic", "gemini"}
+
+# Provider base URLs for non-Emergent providers
+PROVIDER_BASE_URLS = {
+    "deepseek": "https://api.deepseek.com/v1",
+    "qwen": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+    "grok": "https://api.x.ai/v1",
+    "perplexity": "https://api.perplexity.ai",
 }
 
 FLAT_MODELS = [m for models in ALL_MODELS.values() for m in models]
@@ -109,13 +145,18 @@ class MessageCreate(BaseModel):
 async def get_connections():
     doc = await db.connections.find_one({"_id": "global"}, {"_id": 0})
     if not doc:
-        # Default: use EMERGENT_LLM_KEY for all providers
         default_key = os.environ.get("EMERGENT_LLM_KEY", "")
         return {
             "providers": {
                 "openai": {"enabled": True, "apiKey": default_key, "name": "OpenAI", "useEmergentKey": True},
                 "anthropic": {"enabled": True, "apiKey": default_key, "name": "Anthropic", "useEmergentKey": True},
                 "gemini": {"enabled": True, "apiKey": default_key, "name": "Google Gemini", "useEmergentKey": True},
+                "deepseek": {"enabled": False, "apiKey": "", "name": "DeepSeek", "useEmergentKey": False, "baseUrl": "https://api.deepseek.com/v1"},
+                "qwen": {"enabled": False, "apiKey": "", "name": "Qwen", "useEmergentKey": False, "baseUrl": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"},
+                "grok": {"enabled": False, "apiKey": "", "name": "Grok (xAI)", "useEmergentKey": False, "baseUrl": "https://api.x.ai/v1"},
+                "perplexity": {"enabled": False, "apiKey": "", "name": "Perplexity", "useEmergentKey": False, "baseUrl": "https://api.perplexity.ai"},
+                "bedrock": {"enabled": False, "apiKey": "", "name": "Amazon Bedrock", "useEmergentKey": False, "awsRegion": "us-east-1", "awsAccessKey": "", "awsSecretKey": ""},
+                "openai_compatible": {"enabled": False, "apiKey": "", "name": "OpenAI Compatible", "useEmergentKey": False, "baseUrl": "", "customModels": ""},
             },
             "defaultModel": "gpt-4o",
             "modelParams": {"temperature": 0.7, "maxTokens": 4096, "topP": 1.0},
@@ -153,17 +194,41 @@ async def test_connection(data: TestConnectionRequest):
 async def get_models():
     conn = await db.connections.find_one({"_id": "global"}, {"_id": 0})
     if not conn:
-        return FLAT_MODELS
-
-    providers = conn.get("providers", {})
-    disabled = set(conn.get("disabledModels", []))
+        # Use default configuration - only enabled providers (openai, anthropic, gemini)
+        providers = {
+            "openai": {"enabled": True},
+            "anthropic": {"enabled": True},
+            "gemini": {"enabled": True},
+            "deepseek": {"enabled": False},
+            "qwen": {"enabled": False},
+            "grok": {"enabled": False},
+            "perplexity": {"enabled": False},
+            "bedrock": {"enabled": False},
+            "openai_compatible": {"enabled": False},
+        }
+        disabled = set()
+    else:
+        providers = conn.get("providers", {})
+        disabled = set(conn.get("disabledModels", []))
+    
     result = []
     for provider_key, models in ALL_MODELS.items():
+        if provider_key == "openai_compatible":
+            continue
         prov_config = providers.get(provider_key, {})
-        if prov_config.get("enabled", True):
+        if prov_config.get("enabled", False if provider_key not in EMERGENT_PROVIDERS else True):
             for m in models:
                 model_entry = {**m, "enabled": m["id"] not in disabled}
                 result.append(model_entry)
+
+    # Add custom OpenAI Compatible models
+    compat_config = providers.get("openai_compatible", {})
+    if compat_config.get("enabled", False) and compat_config.get("customModels", ""):
+        custom_models = [m.strip() for m in compat_config["customModels"].split(",") if m.strip()]
+        for cm in custom_models:
+            model_entry = {"id": f"openai/{cm}", "name": cm, "provider": "openai_compatible", "enabled": f"openai/{cm}" not in disabled}
+            result.append(model_entry)
+
     return result
 
 # ===== Chat Endpoints =====
@@ -241,16 +306,20 @@ async def send_message(chat_id: str, data: MessageCreate):
     model_id = chat.get("model", "gpt-4o")
     provider = MODEL_PROVIDER_MAP.get(model_id, "openai")
 
+    # For openai_compatible custom models, check if model_id starts with "openai/"
+    if provider == "openai_compatible" or (model_id.startswith("openai/") and provider not in EMERGENT_PROVIDERS):
+        provider = "openai_compatible"
+
     # Load connection config for the correct API key and params
     conn = await db.connections.find_one({"_id": "global"}, {"_id": 0})
     default_key = os.environ.get("EMERGENT_LLM_KEY", "")
 
     if conn:
         prov_config = conn.get("providers", {}).get(provider, {})
-        if prov_config.get("useEmergentKey", True):
+        if prov_config.get("useEmergentKey", True) and provider in EMERGENT_PROVIDERS:
             api_key = default_key
         else:
-            api_key = prov_config.get("apiKey", default_key)
+            api_key = prov_config.get("apiKey", "")
         model_params = conn.get("modelParams", {})
     else:
         api_key = default_key
@@ -266,16 +335,61 @@ async def send_message(chat_id: str, data: MessageCreate):
         app_settings = await db.app_settings.find_one({"_id": "global"}, {"_id": 0})
         system_prompt = (app_settings or {}).get("systemPrompt", "You are a helpful AI assistant. You provide clear, accurate, and well-formatted responses using markdown when appropriate.")
 
-        llm = LlmChat(
-            api_key=api_key,
-            session_id=chat_id,
-            system_message=system_prompt
-        ).with_model(provider, model_id)
+        # Build chat history for context
+        history_msgs = await db.messages.find(
+            {"chat_id": chat_id}, {"_id": 0}
+        ).sort("timestamp", 1).to_list(50)
+        messages_for_llm = [{"role": "system", "content": system_prompt}]
+        for hm in history_msgs:
+            messages_for_llm.append({"role": hm["role"], "content": hm["content"]})
 
-        user_message = UserMessage(text=data.content)
-        response_text = await llm.send_message(user_message)
+        if provider in EMERGENT_PROVIDERS:
+            # Use emergentintegrations for OpenAI, Anthropic, Gemini
+            llm = LlmChat(
+                api_key=api_key,
+                session_id=chat_id,
+                system_message=system_prompt
+            ).with_model(provider, model_id)
+            user_message = UserMessage(text=data.content)
+            response_text = await llm.send_message(user_message)
+        else:
+            # Use litellm for DeepSeek, Qwen, Grok, Perplexity, Bedrock, OpenAI Compatible
+            litellm_model = model_id
+            extra_kwargs = {}
+
+            if provider == "deepseek":
+                os.environ["DEEPSEEK_API_KEY"] = api_key
+            elif provider == "qwen":
+                base_url = (conn or {}).get("providers", {}).get("qwen", {}).get("baseUrl", PROVIDER_BASE_URLS.get("qwen", ""))
+                extra_kwargs["api_base"] = base_url
+                extra_kwargs["api_key"] = api_key
+            elif provider == "grok":
+                os.environ["XAI_API_KEY"] = api_key
+            elif provider == "perplexity":
+                os.environ["PERPLEXITYAI_API_KEY"] = api_key
+            elif provider == "bedrock":
+                bedrock_config = (conn or {}).get("providers", {}).get("bedrock", {})
+                os.environ["AWS_ACCESS_KEY_ID"] = bedrock_config.get("awsAccessKey", "")
+                os.environ["AWS_SECRET_ACCESS_KEY"] = bedrock_config.get("awsSecretKey", "")
+                os.environ["AWS_REGION_NAME"] = bedrock_config.get("awsRegion", "us-east-1")
+            elif provider == "openai_compatible":
+                compat_config = (conn or {}).get("providers", {}).get("openai_compatible", {})
+                base_url = compat_config.get("baseUrl", "")
+                extra_kwargs["api_base"] = base_url
+                extra_kwargs["api_key"] = api_key
+
+            response = await litellm.acompletion(
+                model=litellm_model,
+                messages=messages_for_llm,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                top_p=top_p,
+                **extra_kwargs,
+            )
+            response_text = response.choices[0].message.content
+
     except Exception as e:
-        print(f"LLM error: {e}")
+        logger.error(f"LLM error for provider={provider} model={model_id}: {e}")
         response_text = f"Sorry, I encountered an error while generating a response. Please try again.\n\nError: {str(e)}"
 
     ai_msg = {

@@ -1,281 +1,407 @@
 #!/usr/bin/env python3
+"""
+Backend API Testing for Updated Provider Support
+Tests the connections and models endpoints with 9 providers support
+"""
 
 import requests
 import json
 import sys
-from datetime import datetime
+from typing import Dict, List, Any
 
-# Backend URL from frontend .env
+# Backend URL from frontend/.env
 BACKEND_URL = "https://ui-replica-36.preview.emergentagent.com/api"
 
-def log_test(test_name, status, details=""):
-    timestamp = datetime.now().strftime("%H:%M:%S")
-    status_symbol = "✅" if status == "PASS" else "❌" if status == "FAIL" else "⚠️"
-    print(f"[{timestamp}] {status_symbol} {test_name}")
-    if details:
-        print(f"    {details}")
-    print()
+class TestRunner:
+    def __init__(self):
+        self.passed = 0
+        self.failed = 0
+        self.results = []
+
+    def test(self, name: str, condition: bool, details: str = ""):
+        if condition:
+            self.passed += 1
+            status = "✅ PASS"
+            print(f"{status}: {name}")
+            if details:
+                print(f"    {details}")
+        else:
+            self.failed += 1
+            status = "❌ FAIL"
+            print(f"{status}: {name}")
+            if details:
+                print(f"    {details}")
+        
+        self.results.append({
+            "name": name,
+            "status": status,
+            "details": details
+        })
+
+    def summary(self):
+        total = self.passed + self.failed
+        print(f"\n=== TEST SUMMARY ===")
+        print(f"Total: {total}, Passed: {self.passed}, Failed: {self.failed}")
+        if self.failed > 0:
+            print("\nFAILED TESTS:")
+            for result in self.results:
+                if result["status"] == "❌ FAIL":
+                    print(f"  - {result['name']}: {result['details']}")
+        return self.failed == 0
 
 def test_connections_and_models():
-    """Test the connections and models endpoints as specified in the review request"""
+    """Test the updated connections and models endpoints with 9 provider support"""
+    runner = TestRunner()
     
+    print("🧪 Testing Updated Connections and Models Endpoints with 9 Provider Support")
     print("=" * 80)
-    print("TESTING CONNECTIONS AND MODELS ENDPOINTS")
-    print("=" * 80)
-    print()
     
-    # Test 1: GET /api/connections - Should return default config
-    print("TEST 1: GET /api/connections - Default configuration")
+    # Test 1: GET /api/connections - Should return 9 providers
+    print("\n1. Testing GET /api/connections - Should return 9 providers")
     try:
         response = requests.get(f"{BACKEND_URL}/connections", timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            
-            # Verify structure
-            required_keys = ["providers", "defaultModel", "modelParams", "disabledModels"]
-            missing_keys = [key for key in required_keys if key not in data]
-            
-            if missing_keys:
-                log_test("GET /api/connections - Structure", "FAIL", f"Missing keys: {missing_keys}")
-                return False
-            
-            # Verify providers
-            providers = data.get("providers", {})
-            expected_providers = ["openai", "anthropic", "gemini"]
-            missing_providers = [p for p in expected_providers if p not in providers]
-            
-            if missing_providers:
-                log_test("GET /api/connections - Providers", "FAIL", f"Missing providers: {missing_providers}")
-                return False
-            
-            # Verify all providers are enabled with useEmergentKey=true
-            all_enabled = all(providers[p].get("enabled", False) for p in expected_providers)
-            all_use_emergent = all(providers[p].get("useEmergentKey", False) for p in expected_providers)
-            
-            if not all_enabled:
-                log_test("GET /api/connections - Providers Enabled", "FAIL", "Not all providers enabled by default")
-                return False
-            
-            if not all_use_emergent:
-                log_test("GET /api/connections - UseEmergentKey", "FAIL", "Not all providers using emergent key")
-                return False
-            
-            # Verify default model
-            if data.get("defaultModel") != "gpt-4o":
-                log_test("GET /api/connections - Default Model", "FAIL", f"Expected gpt-4o, got {data.get('defaultModel')}")
-                return False
-            
-            # Verify modelParams structure
-            model_params = data.get("modelParams", {})
-            required_params = ["temperature", "maxTokens", "topP"]
-            missing_params = [p for p in required_params if p not in model_params]
-            
-            if missing_params:
-                log_test("GET /api/connections - Model Params", "FAIL", f"Missing params: {missing_params}")
-                return False
-            
-            log_test("GET /api/connections - Default Config", "PASS", 
-                    f"3 providers enabled, defaultModel={data['defaultModel']}, disabledModels={data['disabledModels']}")
-            
-        else:
-            log_test("GET /api/connections", "FAIL", f"HTTP {response.status_code}: {response.text}")
-            return False
-            
-    except Exception as e:
-        log_test("GET /api/connections", "FAIL", f"Exception: {str(e)}")
-        return False
-    
-    # Test 2: PUT /api/connections - Save updated connections
-    print("TEST 2: PUT /api/connections - Save updated configuration")
-    try:
-        update_data = {
-            "providers": {
-                "openai": {"enabled": True, "apiKey": "", "name": "OpenAI", "useEmergentKey": True},
-                "anthropic": {"enabled": False, "apiKey": "", "name": "Anthropic", "useEmergentKey": True},
-                "gemini": {"enabled": True, "apiKey": "", "name": "Google Gemini", "useEmergentKey": True}
-            },
-            "defaultModel": "gpt-4o",
-            "modelParams": {"temperature": 0.5, "maxTokens": 2048, "topP": 0.9},
-            "disabledModels": ["gpt-5-mini"]
-        }
+        runner.test(
+            "GET /connections returns 200",
+            response.status_code == 200,
+            f"Status: {response.status_code}"
+        )
         
-        response = requests.put(f"{BACKEND_URL}/connections", json=update_data, timeout=10)
-        if response.status_code == 200:
-            result = response.json()
-            if result.get("status") == "ok":
-                log_test("PUT /api/connections - Save", "PASS", "Updated connections saved successfully")
-            else:
-                log_test("PUT /api/connections - Save", "FAIL", f"Unexpected response: {result}")
-                return False
-        else:
-            log_test("PUT /api/connections - Save", "FAIL", f"HTTP {response.status_code}: {response.text}")
-            return False
-            
-    except Exception as e:
-        log_test("PUT /api/connections - Save", "FAIL", f"Exception: {str(e)}")
-        return False
-    
-    # Test 3: GET /api/connections - Verify persistence
-    print("TEST 3: GET /api/connections - Verify persistence of saved data")
-    try:
-        response = requests.get(f"{BACKEND_URL}/connections", timeout=10)
         if response.status_code == 200:
             data = response.json()
+            providers = data.get("providers", {})
             
-            # Verify anthropic is disabled
-            anthropic_enabled = data.get("providers", {}).get("anthropic", {}).get("enabled", True)
-            if anthropic_enabled:
-                log_test("GET /api/connections - Anthropic Disabled", "FAIL", "Anthropic should be disabled")
-                return False
+            # Check for all 9 expected providers
+            expected_providers = [
+                "openai", "anthropic", "gemini",  # enabled by default
+                "deepseek", "qwen", "grok", "perplexity", "bedrock", "openai_compatible"  # disabled by default
+            ]
             
-            # Verify gpt-5-mini is in disabledModels
-            disabled_models = data.get("disabledModels", [])
-            if "gpt-5-mini" not in disabled_models:
-                log_test("GET /api/connections - Disabled Models", "FAIL", "gpt-5-mini should be in disabledModels")
-                return False
+            runner.test(
+                "Has 9 providers",
+                len(providers) == 9,
+                f"Found {len(providers)} providers: {list(providers.keys())}"
+            )
             
-            # Verify temperature is 0.5
-            temperature = data.get("modelParams", {}).get("temperature")
-            if temperature != 0.5:
-                log_test("GET /api/connections - Temperature", "FAIL", f"Expected 0.5, got {temperature}")
-                return False
+            for provider in expected_providers:
+                runner.test(
+                    f"Has {provider} provider",
+                    provider in providers,
+                    f"Provider config: {providers.get(provider, 'MISSING')}"
+                )
             
-            log_test("GET /api/connections - Persistence", "PASS", 
-                    f"Anthropic disabled, gpt-5-mini disabled, temperature={temperature}")
+            # Check default enabled status
+            enabled_by_default = ["openai", "anthropic", "gemini"]
+            disabled_by_default = ["deepseek", "qwen", "grok", "perplexity", "bedrock", "openai_compatible"]
             
-        else:
-            log_test("GET /api/connections - Persistence", "FAIL", f"HTTP {response.status_code}: {response.text}")
-            return False
+            for provider in enabled_by_default:
+                if provider in providers:
+                    runner.test(
+                        f"{provider} enabled by default",
+                        providers[provider].get("enabled", False),
+                        f"Enabled: {providers[provider].get('enabled')}"
+                    )
             
-    except Exception as e:
-        log_test("GET /api/connections - Persistence", "FAIL", f"Exception: {str(e)}")
-        return False
+            for provider in disabled_by_default:
+                if provider in providers:
+                    runner.test(
+                        f"{provider} disabled by default",
+                        not providers[provider].get("enabled", True),
+                        f"Enabled: {providers[provider].get('enabled')}"
+                    )
+            
+            # Check required fields
+            for provider_name, config in providers.items():
+                required_fields = ["enabled", "apiKey", "name", "useEmergentKey"]
+                for field in required_fields:
+                    runner.test(
+                        f"{provider_name} has {field} field",
+                        field in config,
+                        f"Config: {config}"
+                    )
     
-    # Test 4: GET /api/models - Should NOT include anthropic models
-    print("TEST 4: GET /api/models - Verify anthropic models excluded")
+    except Exception as e:
+        runner.test("GET /connections request", False, f"Error: {str(e)}")
+    
+    # Test 2: GET /api/models - Should return 8 models from 3 enabled providers
+    print("\n2. Testing GET /api/models - Should return 8 models from 3 enabled providers")
     try:
         response = requests.get(f"{BACKEND_URL}/models", timeout=10)
+        runner.test(
+            "GET /models returns 200",
+            response.status_code == 200,
+            f"Status: {response.status_code}"
+        )
+        
         if response.status_code == 200:
             models = response.json()
             
-            # Check that no anthropic models are included
-            anthropic_models = [m for m in models if m.get("provider") == "anthropic"]
-            if anthropic_models:
-                log_test("GET /api/models - Anthropic Excluded", "FAIL", 
-                        f"Found {len(anthropic_models)} anthropic models when provider is disabled")
-                return False
+            runner.test(
+                "Returns 8 models initially",
+                len(models) == 8,
+                f"Found {len(models)} models"
+            )
             
-            # Check that gpt-5-mini is included but with enabled=false
-            gpt5_mini = next((m for m in models if m.get("id") == "gpt-5-mini"), None)
-            if not gpt5_mini:
-                log_test("GET /api/models - GPT-5-mini Present", "FAIL", "gpt-5-mini should be present in models")
-                return False
+            # Check provider distribution
+            provider_counts = {}
+            for model in models:
+                provider = model.get("provider")
+                provider_counts[provider] = provider_counts.get(provider, 0) + 1
             
-            if gpt5_mini.get("enabled", True):
-                log_test("GET /api/models - GPT-5-mini Disabled", "FAIL", "gpt-5-mini should have enabled=false")
-                return False
+            expected_counts = {"openai": 4, "anthropic": 2, "gemini": 2}
+            for provider, expected_count in expected_counts.items():
+                actual_count = provider_counts.get(provider, 0)
+                runner.test(
+                    f"Has {expected_count} {provider} models",
+                    actual_count == expected_count,
+                    f"Expected: {expected_count}, Found: {actual_count}"
+                )
             
-            # Count total models (should be 6: 4 openai + 2 gemini)
-            total_models = len(models)
-            expected_count = 6  # 4 openai + 2 gemini (no anthropic)
-            
-            log_test("GET /api/models - Filtered Results", "PASS", 
-                    f"Found {total_models} models (no anthropic), gpt-5-mini enabled=false")
-            
-        else:
-            log_test("GET /api/models - Filtered", "FAIL", f"HTTP {response.status_code}: {response.text}")
-            return False
-            
-    except Exception as e:
-        log_test("GET /api/models - Filtered", "FAIL", f"Exception: {str(e)}")
-        return False
+            # Verify no models from disabled providers
+            disabled_providers = ["deepseek", "qwen", "grok", "perplexity", "bedrock", "openai_compatible"]
+            for provider in disabled_providers:
+                count = provider_counts.get(provider, 0)
+                runner.test(
+                    f"No {provider} models (disabled)",
+                    count == 0,
+                    f"Found {count} models from disabled provider"
+                )
     
-    # Test 5: PUT /api/connections - Restore defaults
-    print("TEST 5: PUT /api/connections - Restore defaults")
+    except Exception as e:
+        runner.test("GET /models request", False, f"Error: {str(e)}")
+    
+    # Test 3: PUT /api/connections - Enable deepseek and grok
+    print("\n3. Testing PUT /api/connections - Enable deepseek and grok")
     try:
-        restore_data = {
+        update_data = {
             "providers": {
-                "openai": {"enabled": True, "apiKey": "", "name": "OpenAI", "useEmergentKey": True},
-                "anthropic": {"enabled": True, "apiKey": "", "name": "Anthropic", "useEmergentKey": True},
-                "gemini": {"enabled": True, "apiKey": "", "name": "Google Gemini", "useEmergentKey": True}
+                "openai": {"enabled": True, "useEmergentKey": True},
+                "anthropic": {"enabled": True, "useEmergentKey": True},
+                "gemini": {"enabled": True, "useEmergentKey": True},
+                "deepseek": {"enabled": True, "apiKey": "test-key", "useEmergentKey": False},
+                "qwen": {"enabled": False},
+                "grok": {"enabled": True, "apiKey": "test-key", "useEmergentKey": False},
+                "perplexity": {"enabled": False},
+                "bedrock": {"enabled": False},
+                "openai_compatible": {"enabled": False}
             },
             "defaultModel": "gpt-4o",
             "modelParams": {"temperature": 0.7, "maxTokens": 4096, "topP": 1.0},
             "disabledModels": []
         }
         
-        response = requests.put(f"{BACKEND_URL}/connections", json=restore_data, timeout=10)
+        response = requests.put(
+            f"{BACKEND_URL}/connections",
+            json=update_data,
+            headers={"Content-Type": "application/json"},
+            timeout=10
+        )
+        
+        runner.test(
+            "PUT /connections returns 200",
+            response.status_code == 200,
+            f"Status: {response.status_code}, Response: {response.text}"
+        )
+        
         if response.status_code == 200:
-            result = response.json()
-            if result.get("status") == "ok":
-                log_test("PUT /api/connections - Restore", "PASS", "Default connections restored successfully")
-            else:
-                log_test("PUT /api/connections - Restore", "FAIL", f"Unexpected response: {result}")
-                return False
-        else:
-            log_test("PUT /api/connections - Restore", "FAIL", f"HTTP {response.status_code}: {response.text}")
-            return False
-            
-    except Exception as e:
-        log_test("PUT /api/connections - Restore", "FAIL", f"Exception: {str(e)}")
-        return False
+            # Verify the update was saved
+            verify_response = requests.get(f"{BACKEND_URL}/connections", timeout=10)
+            if verify_response.status_code == 200:
+                data = verify_response.json()
+                providers = data.get("providers", {})
+                
+                runner.test(
+                    "deepseek enabled after update",
+                    providers.get("deepseek", {}).get("enabled", False),
+                    f"deepseek config: {providers.get('deepseek')}"
+                )
+                
+                runner.test(
+                    "grok enabled after update",
+                    providers.get("grok", {}).get("enabled", False),
+                    f"grok config: {providers.get('grok')}"
+                )
     
-    # Test 6: GET /api/models - Should now include all 8 models
-    print("TEST 6: GET /api/models - Verify all models included and enabled")
+    except Exception as e:
+        runner.test("PUT /connections request", False, f"Error: {str(e)}")
+    
+    # Test 4: GET /api/models - Should now return 12 models (8 + 2 + 2)
+    print("\n4. Testing GET /api/models - Should return 12 models after enabling deepseek and grok")
     try:
         response = requests.get(f"{BACKEND_URL}/models", timeout=10)
+        runner.test(
+            "GET /models returns 200 after update",
+            response.status_code == 200,
+            f"Status: {response.status_code}"
+        )
+        
         if response.status_code == 200:
             models = response.json()
             
-            # Count models by provider
-            openai_models = [m for m in models if m.get("provider") == "openai"]
-            anthropic_models = [m for m in models if m.get("provider") == "anthropic"]
-            gemini_models = [m for m in models if m.get("provider") == "gemini"]
+            runner.test(
+                "Returns 12 models after enabling deepseek and grok",
+                len(models) == 12,
+                f"Found {len(models)} models"
+            )
             
-            total_models = len(models)
-            expected_total = 8  # 4 openai + 2 anthropic + 2 gemini
+            # Check provider distribution
+            provider_counts = {}
+            for model in models:
+                provider = model.get("provider")
+                provider_counts[provider] = provider_counts.get(provider, 0) + 1
             
-            if total_models != expected_total:
-                log_test("GET /api/models - Total Count", "FAIL", 
-                        f"Expected {expected_total} models, got {total_models}")
-                return False
-            
-            # Verify all models are enabled
-            disabled_models = [m for m in models if not m.get("enabled", True)]
-            if disabled_models:
-                log_test("GET /api/models - All Enabled", "FAIL", 
-                        f"Found {len(disabled_models)} disabled models: {[m['id'] for m in disabled_models]}")
-                return False
-            
-            log_test("GET /api/models - All Models", "PASS", 
-                    f"Found all {total_models} models: {len(openai_models)} OpenAI, {len(anthropic_models)} Anthropic, {len(gemini_models)} Gemini - all enabled")
-            
-        else:
-            log_test("GET /api/models - All Models", "FAIL", f"HTTP {response.status_code}: {response.text}")
-            return False
-            
-    except Exception as e:
-        log_test("GET /api/models - All Models", "FAIL", f"Exception: {str(e)}")
-        return False
+            expected_counts = {"openai": 4, "anthropic": 2, "gemini": 2, "deepseek": 2, "grok": 2}
+            for provider, expected_count in expected_counts.items():
+                actual_count = provider_counts.get(provider, 0)
+                runner.test(
+                    f"Has {expected_count} {provider} models",
+                    actual_count == expected_count,
+                    f"Expected: {expected_count}, Found: {actual_count}"
+                )
     
-    return True
+    except Exception as e:
+        runner.test("GET /models after update", False, f"Error: {str(e)}")
+    
+    # Test 5: PUT /api/connections - Enable openai_compatible with custom models
+    print("\n5. Testing PUT /api/connections - Enable openai_compatible with custom models")
+    try:
+        update_data = {
+            "providers": {
+                "openai": {"enabled": True, "useEmergentKey": True},
+                "anthropic": {"enabled": True, "useEmergentKey": True},
+                "gemini": {"enabled": True, "useEmergentKey": True},
+                "deepseek": {"enabled": True, "apiKey": "test-key", "useEmergentKey": False},
+                "qwen": {"enabled": False},
+                "grok": {"enabled": True, "apiKey": "test-key", "useEmergentKey": False},
+                "perplexity": {"enabled": False},
+                "bedrock": {"enabled": False},
+                "openai_compatible": {
+                    "enabled": True,
+                    "apiKey": "test",
+                    "useEmergentKey": False,
+                    "baseUrl": "https://api.example.com/v1",
+                    "customModels": "custom-model-1, custom-model-2"
+                }
+            },
+            "defaultModel": "gpt-4o",
+            "modelParams": {"temperature": 0.7, "maxTokens": 4096, "topP": 1.0},
+            "disabledModels": []
+        }
+        
+        response = requests.put(
+            f"{BACKEND_URL}/connections",
+            json=update_data,
+            headers={"Content-Type": "application/json"},
+            timeout=10
+        )
+        
+        runner.test(
+            "PUT /connections with openai_compatible returns 200",
+            response.status_code == 200,
+            f"Status: {response.status_code}, Response: {response.text}"
+        )
+    
+    except Exception as e:
+        runner.test("PUT /connections with openai_compatible", False, f"Error: {str(e)}")
+    
+    # Test 6: GET /api/models - Should include custom models
+    print("\n6. Testing GET /api/models - Should include custom models from openai_compatible")
+    try:
+        response = requests.get(f"{BACKEND_URL}/models", timeout=10)
+        runner.test(
+            "GET /models returns 200 with custom models",
+            response.status_code == 200,
+            f"Status: {response.status_code}"
+        )
+        
+        if response.status_code == 200:
+            models = response.json()
+            
+            runner.test(
+                "Returns 14 models with custom models",
+                len(models) == 14,
+                f"Found {len(models)} models"
+            )
+            
+            # Check for custom models
+            custom_models = [m for m in models if m.get("provider") == "openai_compatible"]
+            runner.test(
+                "Has 2 custom models",
+                len(custom_models) == 2,
+                f"Found {len(custom_models)} custom models: {[m.get('name') for m in custom_models]}"
+            )
+            
+            # Check custom model names
+            custom_names = [m.get("name") for m in custom_models]
+            expected_names = ["custom-model-1", "custom-model-2"]
+            for name in expected_names:
+                runner.test(
+                    f"Has custom model {name}",
+                    name in custom_names,
+                    f"Found custom models: {custom_names}"
+                )
+    
+    except Exception as e:
+        runner.test("GET /models with custom models", False, f"Error: {str(e)}")
+    
+    # Test 7: Clean up - Reset to default configuration
+    print("\n7. Testing cleanup - Reset to default configuration")
+    try:
+        default_data = {
+            "providers": {
+                "openai": {"enabled": True, "useEmergentKey": True},
+                "anthropic": {"enabled": True, "useEmergentKey": True},
+                "gemini": {"enabled": True, "useEmergentKey": True},
+                "deepseek": {"enabled": False},
+                "qwen": {"enabled": False},
+                "grok": {"enabled": False},
+                "perplexity": {"enabled": False},
+                "bedrock": {"enabled": False},
+                "openai_compatible": {"enabled": False}
+            },
+            "defaultModel": "gpt-4o",
+            "modelParams": {"temperature": 0.7, "maxTokens": 4096, "topP": 1.0},
+            "disabledModels": []
+        }
+        
+        response = requests.put(
+            f"{BACKEND_URL}/connections",
+            json=default_data,
+            headers={"Content-Type": "application/json"},
+            timeout=10
+        )
+        
+        runner.test(
+            "Reset to defaults returns 200",
+            response.status_code == 200,
+            f"Status: {response.status_code}"
+        )
+        
+        # Verify reset
+        if response.status_code == 200:
+            verify_response = requests.get(f"{BACKEND_URL}/models", timeout=10)
+            if verify_response.status_code == 200:
+                models = verify_response.json()
+                runner.test(
+                    "Back to 8 models after reset",
+                    len(models) == 8,
+                    f"Found {len(models)} models after reset"
+                )
+    
+    except Exception as e:
+        runner.test("Reset to defaults", False, f"Error: {str(e)}")
+    
+    return runner.summary()
 
-def main():
-    """Run all tests"""
+if __name__ == "__main__":
+    print("🚀 Starting Backend API Tests for Updated Provider Support")
     print(f"Backend URL: {BACKEND_URL}")
-    print(f"Test started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print()
     
     success = test_connections_and_models()
     
-    print("=" * 80)
     if success:
-        print("🎉 ALL TESTS PASSED! Connections and Models endpoints working correctly.")
+        print("\n🎉 All tests passed!")
+        sys.exit(0)
     else:
-        print("❌ SOME TESTS FAILED! Check the output above for details.")
-    print("=" * 80)
-    
-    return 0 if success else 1
-
-if __name__ == "__main__":
-    sys.exit(main())
+        print("\n💥 Some tests failed!")
+        sys.exit(1)

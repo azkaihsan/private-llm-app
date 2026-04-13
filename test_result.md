@@ -323,6 +323,9 @@ backend:
         - working: true
         - agent: "testing"
         - comment: "✅ PASSED: Returns default config with 3 providers (openai, anthropic, gemini) all enabled with useEmergentKey=true, defaultModel=gpt-4o, modelParams with temperature/maxTokens/topP, and disabledModels array"
+        - working: true
+        - agent: "testing"
+        - comment: "✅ PASSED: Updated to support 9 providers total - openai, anthropic, gemini (enabled by default), plus deepseek, qwen, grok, perplexity, bedrock, openai_compatible (disabled by default). All providers have complete field definitions including apiKey, name, useEmergentKey, and provider-specific fields like baseUrl, awsRegion, customModels."
 
   - task: "PUT /api/connections - Save provider connections configuration"
     implemented: true
@@ -335,6 +338,9 @@ backend:
         - working: true
         - agent: "testing"
         - comment: "✅ PASSED: Successfully saves updated connections configuration and persists data to MongoDB. Verified persistence by disabling anthropic provider and adding gpt-5-mini to disabledModels"
+        - working: true
+        - agent: "testing"
+        - comment: "✅ PASSED: Successfully saves configurations for all 9 providers including enabling/disabling providers, setting API keys, configuring custom models for openai_compatible provider, and persisting all changes to MongoDB. Tested enabling deepseek and grok providers, and adding custom models."
 
   - task: "GET /api/models - List available models with provider filtering"
     implemented: true
@@ -347,6 +353,9 @@ backend:
         - working: true
         - agent: "testing"
         - comment: "✅ PASSED: Correctly filters models based on provider enabled/disabled status. When anthropic disabled, excludes anthropic models. Includes disabled models with enabled=false flag. Returns all 8 models when all providers enabled"
+        - working: true
+        - agent: "testing"
+        - comment: "✅ PASSED: Updated to support all 9 providers with proper filtering. Returns 8 models from 3 enabled providers by default (4 openai + 2 anthropic + 2 gemini). When additional providers enabled (deepseek, grok), correctly returns 12 models. Supports custom models from openai_compatible provider - when enabled with customModels='custom-model-1, custom-model-2', adds 2 custom models for total of 14. Fixed issue where disabled providers were showing models when no database config existed."
 
 frontend:
   - task: "Sidebar with chat list"
@@ -434,3 +443,7 @@ agent_communication:
     - message: "Added connections and models endpoints: GET /api/connections (returns provider config), PUT /api/connections (saves config), GET /api/models (filtered by provider status). Please test the complete workflow as specified in review request."
     - agent: "testing"
     - message: "✅ CONNECTIONS AND MODELS TESTING COMPLETED SUCCESSFULLY! All 6 test scenarios passed perfectly. Tested: 1) GET default config with 3 providers enabled, 2) PUT save updated config (anthropic disabled, gpt-5-mini disabled), 3) GET verify persistence, 4) GET models excludes anthropic models and shows gpt-5-mini as enabled=false, 5) PUT restore defaults, 6) GET models shows all 8 models enabled. Provider filtering and model status management working correctly with proper MongoDB persistence."
+    - agent: "main"
+    - message: "Updated connections and models endpoints to support 9 providers total: openai, anthropic, gemini (enabled by default), plus deepseek, qwen, grok, perplexity, bedrock, openai_compatible (disabled by default). Added support for custom models via openai_compatible provider. Please test the updated functionality as specified in review request."
+    - agent: "testing"
+    - message: "✅ UPDATED PROVIDER SUPPORT TESTING COMPLETED SUCCESSFULLY! All 7 test scenarios passed perfectly. Verified: 1) GET /api/connections returns 9 providers with complete field definitions, 2) GET /api/models returns 8 models from 3 enabled providers initially, 3) PUT /api/connections successfully enables deepseek and grok, 4) GET /api/models returns 12 models after enabling additional providers, 5) PUT /api/connections enables openai_compatible with custom models, 6) GET /api/models includes 2 custom models for total of 14, 7) Reset to defaults works correctly. Fixed issue where models endpoint was returning all models when no database config existed. All provider filtering, custom model support, and configuration persistence working perfectly."
