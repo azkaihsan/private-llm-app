@@ -1,5 +1,6 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, UploadFile, File, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -9,11 +10,14 @@ from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional
 import uuid
+import base64
+import io
 from datetime import datetime, timezone, timedelta
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 import litellm
 import jwt
 from passlib.context import CryptContext
+import requests as http_requests
 
 
 ROOT_DIR = Path(__file__).parent
@@ -83,6 +87,81 @@ async def get_optional_user(credentials: HTTPAuthorizationCredentials = Depends(
         return user
     except Exception:
         return None
+
+
+# ===== Object Storage =====
+STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
+EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY")
+APP_NAME = "openwebui-clone"
+_storage_key = None
+
+def init_storage():
+    global _storage_key
+    if _storage_key:
+        return _storage_key
+    resp = http_requests.post(f"{STORAGE_URL}/init", json={"emergent_key": EMERGENT_KEY}, timeout=30)
+    resp.raise_for_status()
+    _storage_key = resp.json()["storage_key"]
+    return _storage_key
+
+def put_object(path: str, data: bytes, content_type: str) -> dict:
+    key = init_storage()
+    resp = http_requests.put(
+        f"{STORAGE_URL}/objects/{path}",
+        headers={"X-Storage-Key": key, "Content-Type": content_type},
+        data=data, timeout=120
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+def get_object(path: str):
+    key = init_storage()
+    resp = http_requests.get(
+        f"{STORAGE_URL}/objects/{path}",
+        headers={"X-Storage-Key": key}, timeout=60
+    )
+    resp.raise_for_status()
+    return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
+
+
+# ===== File Processing Utilities =====
+IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "ico"}
+TEXT_EXTENSIONS = {"txt", "md", "csv", "json", "xml", "yaml", "yml", "html", "css", "js", "jsx", "ts", "tsx", "py", "java", "c", "cpp", "h", "go", "rs", "rb", "php", "sh", "bash", "sql", "r", "swift", "kt", "toml", "ini", "cfg", "log", "env"}
+MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB
+
+def extract_text_from_file(data: bytes, filename: str, content_type: str) -> str:
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    try:
+        if ext == "pdf" or content_type == "application/pdf":
+            from PyPDF2 import PdfReader
+            reader = PdfReader(io.BytesIO(data))
+            text = "\n".join(page.extract_text() or "" for page in reader.pages)
+            return text.strip()[:50000]
+        elif ext == "docx" or content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+            from docx import Document
+            doc = Document(io.BytesIO(data))
+            text = "\n".join(p.text for p in doc.paragraphs)
+            return text.strip()[:50000]
+        elif ext == "xlsx" or content_type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+            from openpyxl import load_workbook
+            wb = load_workbook(io.BytesIO(data), read_only=True)
+            rows = []
+            for sheet in wb.sheetnames:
+                ws = wb[sheet]
+                rows.append(f"--- Sheet: {sheet} ---")
+                for row in ws.iter_rows(values_only=True):
+                    rows.append(",".join(str(c) if c is not None else "" for c in row))
+            return "\n".join(rows)[:50000]
+        elif ext in TEXT_EXTENSIONS:
+            return data.decode("utf-8", errors="replace")[:50000]
+        else:
+            return ""
+    except Exception as e:
+        return f"[Error extracting text: {str(e)}]"
+
+def is_image_file(filename: str, content_type: str) -> bool:
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    return ext in IMAGE_EXTENSIONS or (content_type or "").startswith("image/")
 
 
 # Define Models
@@ -254,6 +333,56 @@ async def admin_delete_user(user_id: str, admin=Depends(get_admin_user)):
     await db.chats.delete_many({"user_id": user_id})
     return {"status": "ok"}
 
+# ===== File Upload/Download Endpoints =====
+
+@api_router.post("/files/upload")
+async def upload_file(file: UploadFile = File(...), user=Depends(get_current_user)):
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided")
+    data = await file.read()
+    if len(data) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="File too large (max 20MB)")
+
+    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else "bin"
+    file_id = str(uuid.uuid4())
+    storage_path = f"{APP_NAME}/uploads/{user['id']}/{file_id}.{ext}"
+    content_type = file.content_type or "application/octet-stream"
+
+    result = put_object(storage_path, data, content_type)
+
+    file_doc = {
+        "id": file_id,
+        "storage_path": result["path"],
+        "original_filename": file.filename,
+        "content_type": content_type,
+        "size": len(data),
+        "user_id": user["id"],
+        "is_image": is_image_file(file.filename, content_type),
+        "is_deleted": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.files.insert_one({**file_doc, "_id": file_id})
+    return {k: v for k, v in file_doc.items() if k != "_id"}
+
+@api_router.get("/files/{file_id}")
+async def download_file(file_id: str, auth: str = Query(None), user=Depends(get_optional_user)):
+    # Support query param auth for img tags
+    if not user and auth:
+        try:
+            payload = decode_token(auth)
+            user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
+        except Exception:
+            pass
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    record = await db.files.find_one({"id": file_id, "is_deleted": False}, {"_id": 0})
+    if not record:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    data, ct = get_object(record["storage_path"])
+    return Response(content=data, media_type=record.get("content_type", ct))
+
 # Include the router in the main app - moved to after all routes are defined
 
 # ===== Chat Models =====
@@ -321,6 +450,7 @@ class ChatUpdate(BaseModel):
 
 class MessageCreate(BaseModel):
     content: str
+    file_ids: Optional[List[str]] = None
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
     top_p: Optional[float] = None
@@ -371,7 +501,7 @@ async def test_connection(data: TestConnectionRequest, admin=Depends(get_admin_u
             session_id=f"test-{uuid.uuid4()}",
             system_message="Reply with exactly: CONNECTION_OK"
         ).with_model(data.provider, None)
-        result = await llm.send_message(UserMessage(text="Say CONNECTION_OK"))
+        result = await llm.send_message(UserMessage(text="Say CONNECTION_OK"))  # noqa: F841
         return {"status": "ok", "message": "Connection successful"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -473,12 +603,43 @@ async def send_message(chat_id: str, data: MessageCreate, user=Depends(get_curre
 
     now_ts = datetime.now(timezone.utc).isoformat()
 
-    # Save user message
+    # Process file attachments
+    attachments = []
+    file_text_parts = []
+    image_b64_list = []
+
+    if data.file_ids:
+        for fid in data.file_ids:
+            file_rec = await db.files.find_one({"id": fid, "user_id": user["id"], "is_deleted": False}, {"_id": 0})
+            if not file_rec:
+                continue
+            attachments.append({
+                "id": file_rec["id"],
+                "filename": file_rec["original_filename"],
+                "content_type": file_rec["content_type"],
+                "size": file_rec["size"],
+                "is_image": file_rec.get("is_image", False),
+            })
+            try:
+                file_data, _ = get_object(file_rec["storage_path"])
+                if file_rec.get("is_image", False):
+                    b64 = base64.b64encode(file_data).decode("utf-8")
+                    mime = file_rec["content_type"] or "image/png"
+                    image_b64_list.append(f"data:{mime};base64,{b64}")
+                else:
+                    text = extract_text_from_file(file_data, file_rec["original_filename"], file_rec["content_type"])
+                    if text:
+                        file_text_parts.append(f"[File: {file_rec['original_filename']}]\n{text}")
+            except Exception as e:
+                logger.error(f"Error processing file {fid}: {e}")
+
+    # Save user message with attachments
     user_msg = {
         "id": str(uuid.uuid4()),
         "chat_id": chat_id,
         "role": "user",
         "content": data.content,
+        "attachments": attachments if attachments else None,
         "timestamp": now_ts,
     }
     await db.messages.insert_one({**user_msg, "_id": user_msg["id"]})
@@ -487,17 +648,17 @@ async def send_message(chat_id: str, data: MessageCreate, user=Depends(get_curre
     existing = await db.messages.count_documents({"chat_id": chat_id})
     if existing <= 1:
         title = data.content[:50] + ("..." if len(data.content) > 50 else "")
+        if not data.content.strip() and attachments:
+            title = f"[{attachments[0]['filename']}]"
         await db.chats.update_one({"id": chat_id}, {"$set": {"title": title}})
 
     # Get LLM response
     model_id = chat.get("model", "gpt-4o")
     provider = MODEL_PROVIDER_MAP.get(model_id, "openai")
 
-    # For openai_compatible custom models, check if model_id starts with "openai/"
     if provider == "openai_compatible" or (model_id.startswith("openai/") and provider not in EMERGENT_PROVIDERS):
         provider = "openai_compatible"
 
-    # Load connection config for the correct API key and params
     conn = await db.connections.find_one({"_id": "global"}, {"_id": 0})
     default_key = os.environ.get("EMERGENT_LLM_KEY", "")
 
@@ -512,35 +673,53 @@ async def send_message(chat_id: str, data: MessageCreate, user=Depends(get_curre
         api_key = default_key
         model_params = {}
 
-    # Override with per-message params if provided
     temperature = data.temperature if data.temperature is not None else model_params.get("temperature", 0.7)
     max_tokens = data.max_tokens if data.max_tokens is not None else model_params.get("maxTokens", 4096)
     top_p = data.top_p if data.top_p is not None else model_params.get("topP", 1.0)
 
+    # Build the user prompt with file context
+    user_prompt = data.content or ""
+    if file_text_parts:
+        user_prompt = user_prompt + "\n\n" + "\n\n".join(file_text_parts) if user_prompt else "\n\n".join(file_text_parts)
+
     try:
-        # Load custom system prompt from settings
         app_settings = await db.app_settings.find_one({"_id": "global"}, {"_id": 0})
         system_prompt = (app_settings or {}).get("systemPrompt", "You are a helpful AI assistant. You provide clear, accurate, and well-formatted responses using markdown when appropriate.")
 
-        # Build chat history for context
+        # Build chat history
         history_msgs = await db.messages.find(
             {"chat_id": chat_id}, {"_id": 0}
         ).sort("timestamp", 1).to_list(50)
-        messages_for_llm = [{"role": "system", "content": system_prompt}]
-        for hm in history_msgs:
-            messages_for_llm.append({"role": hm["role"], "content": hm["content"]})
 
         if provider in EMERGENT_PROVIDERS:
-            # Use emergentintegrations for OpenAI, Anthropic, Gemini
             llm = LlmChat(
                 api_key=api_key,
                 session_id=chat_id,
                 system_message=system_prompt
             ).with_model(provider, model_id)
-            user_message = UserMessage(text=data.content)
+
+            if image_b64_list:
+                user_message = UserMessage(text=user_prompt or "What do you see in this image?", images=image_b64_list)
+            else:
+                user_message = UserMessage(text=user_prompt)
             response_text = await llm.send_message(user_message)
         else:
-            # Use litellm for DeepSeek, Qwen, Grok, Perplexity, Bedrock, OpenAI Compatible
+            # Use litellm
+            messages_for_llm = [{"role": "system", "content": system_prompt}]
+            for hm in history_msgs:
+                messages_for_llm.append({"role": hm["role"], "content": hm["content"]})
+
+            # Build multimodal content for the current message if images present
+            if image_b64_list:
+                content_parts = []
+                if user_prompt:
+                    content_parts.append({"type": "text", "text": user_prompt})
+                for img_url in image_b64_list:
+                    content_parts.append({"type": "image_url", "image_url": {"url": img_url}})
+                messages_for_llm.append({"role": "user", "content": content_parts})
+            else:
+                messages_for_llm.append({"role": "user", "content": user_prompt})
+
             litellm_model = model_id
             extra_kwargs = {}
 
@@ -588,7 +767,6 @@ async def send_message(chat_id: str, data: MessageCreate, user=Depends(get_curre
     }
     await db.messages.insert_one({**ai_msg, "_id": ai_msg["id"]})
 
-    # Return both messages without _id
     return {
         "user_message": {k: v for k, v in user_msg.items() if k != "_id"},
         "assistant_message": {k: v for k, v in ai_msg.items() if k != "_id"},
@@ -695,6 +873,14 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+@app.on_event("startup")
+async def startup_event():
+    try:
+        init_storage()
+        logger.info("Object storage initialized successfully")
+    except Exception as e:
+        logger.error(f"Object storage init failed: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
