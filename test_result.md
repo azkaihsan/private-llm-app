@@ -312,6 +312,42 @@ backend:
         - agent: "testing"
         - comment: "✅ PASSED: Successfully deletes all archived chats and their associated messages. Returns correct count of deleted chats"
 
+  - task: "GET /api/connections - Get provider connections configuration"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+        - agent: "testing"
+        - comment: "✅ PASSED: Returns default config with 3 providers (openai, anthropic, gemini) all enabled with useEmergentKey=true, defaultModel=gpt-4o, modelParams with temperature/maxTokens/topP, and disabledModels array"
+
+  - task: "PUT /api/connections - Save provider connections configuration"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+        - agent: "testing"
+        - comment: "✅ PASSED: Successfully saves updated connections configuration and persists data to MongoDB. Verified persistence by disabling anthropic provider and adding gpt-5-mini to disabledModels"
+
+  - task: "GET /api/models - List available models with provider filtering"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+        - agent: "testing"
+        - comment: "✅ PASSED: Correctly filters models based on provider enabled/disabled status. When anthropic disabled, excludes anthropic models. Includes disabled models with enabled=false flag. Returns all 8 models when all providers enabled"
+
 frontend:
   - task: "Sidebar with chat list"
     implemented: true
@@ -394,3 +430,7 @@ agent_communication:
     - message: "Added archive, export, and import functionality: PUT /api/chats/{chat_id}/archive, GET /api/chats/archived, PUT /api/chats/{chat_id}/unarchive, GET /api/chats/{chat_id}/export, POST /api/chats/import, DELETE /api/chats/archived/all. Please test complete workflow."
     - agent: "testing"
     - message: "✅ ARCHIVE/EXPORT/IMPORT TESTING COMPLETED SUCCESSFULLY! All 6 new endpoints working perfectly. Fixed critical FastAPI routing issue where /chats/archived was conflicting with /chats/{chat_id}. Tested complete workflow: create→archive→verify exclusion from regular list→verify in archived list→unarchive→verify back in regular→export with all fields→import with messages→cleanup. All 12 test cases passed including proper cleanup and verification."
+    - agent: "main"
+    - message: "Added connections and models endpoints: GET /api/connections (returns provider config), PUT /api/connections (saves config), GET /api/models (filtered by provider status). Please test the complete workflow as specified in review request."
+    - agent: "testing"
+    - message: "✅ CONNECTIONS AND MODELS TESTING COMPLETED SUCCESSFULLY! All 6 test scenarios passed perfectly. Tested: 1) GET default config with 3 providers enabled, 2) PUT save updated config (anthropic disabled, gpt-5-mini disabled), 3) GET verify persistence, 4) GET models excludes anthropic models and shows gpt-5-mini as enabled=false, 5) PUT restore defaults, 6) GET models shows all 8 models enabled. Provider filtering and model status management working correctly with proper MongoDB persistence."

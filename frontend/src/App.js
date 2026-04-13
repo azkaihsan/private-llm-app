@@ -27,18 +27,23 @@ function AppContent() {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Fetch models on mount
-  useEffect(() => {
-    const fetchModels = async () => {
-      try {
-        const res = await axios.get(`${API}/models`);
-        setModels(res.data);
-        if (res.data.length > 0) setSelectedModel(res.data[0]);
-      } catch (e) {
-        console.error("Failed to fetch models:", e);
-      }
-    };
-    fetchModels();
+  const fetchModels = useCallback(async () => {
+    try {
+      const res = await axios.get(`${API}/models`);
+      const enabledModels = res.data.filter(m => m.enabled !== false);
+      setModels(enabledModels);
+      // Try to load default model from connections
+      const connRes = await axios.get(`${API}/connections`);
+      const defaultModelId = connRes.data?.defaultModel;
+      const defaultModel = enabledModels.find(m => m.id === defaultModelId);
+      if (defaultModel) setSelectedModel(defaultModel);
+      else if (enabledModels.length > 0 && !selectedModel) setSelectedModel(enabledModels[0]);
+    } catch (e) {
+      console.error("Failed to fetch models:", e);
+    }
   }, []);
+
+  useEffect(() => { fetchModels(); }, [fetchModels]);
 
   // Fetch chats on mount
   useEffect(() => {
@@ -324,7 +329,7 @@ function AppContent() {
         />
       </div>
 
-      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} onModelsChanged={fetchModels} />
     </div>
   );
 }

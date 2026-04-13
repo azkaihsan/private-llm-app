@@ -70,18 +70,25 @@ async def get_status_checks():
 # Include the router in the main app - moved to after all routes are defined
 
 # ===== Chat Models =====
-AVAILABLE_MODELS = [
-    {"id": "gpt-4o", "name": "GPT-4o", "provider": "openai", "size": ""},
-    {"id": "gpt-4.1-mini", "name": "GPT-4.1 mini", "provider": "openai", "size": ""},
-    {"id": "gpt-5.1", "name": "GPT-5.1", "provider": "openai", "size": ""},
-    {"id": "gpt-5-mini", "name": "GPT-5 mini", "provider": "openai", "size": ""},
-    {"id": "claude-sonnet-4-5-20250929", "name": "Claude Sonnet 4.5", "provider": "anthropic", "size": ""},
-    {"id": "claude-4-sonnet-20250514", "name": "Claude 4 Sonnet", "provider": "anthropic", "size": ""},
-    {"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash", "provider": "gemini", "size": ""},
-    {"id": "gemini-2.5-pro", "name": "Gemini 2.5 Pro", "provider": "gemini", "size": ""},
-]
+ALL_MODELS = {
+    "openai": [
+        {"id": "gpt-4o", "name": "GPT-4o", "provider": "openai"},
+        {"id": "gpt-4.1-mini", "name": "GPT-4.1 mini", "provider": "openai"},
+        {"id": "gpt-5.1", "name": "GPT-5.1", "provider": "openai"},
+        {"id": "gpt-5-mini", "name": "GPT-5 mini", "provider": "openai"},
+    ],
+    "anthropic": [
+        {"id": "claude-sonnet-4-5-20250929", "name": "Claude Sonnet 4.5", "provider": "anthropic"},
+        {"id": "claude-4-sonnet-20250514", "name": "Claude 4 Sonnet", "provider": "anthropic"},
+    ],
+    "gemini": [
+        {"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash", "provider": "gemini"},
+        {"id": "gemini-2.5-pro", "name": "Gemini 2.5 Pro", "provider": "gemini"},
+    ],
+}
 
-MODEL_PROVIDER_MAP = {m["id"]: m["provider"] for m in AVAILABLE_MODELS}
+FLAT_MODELS = [m for models in ALL_MODELS.values() for m in models]
+MODEL_PROVIDER_MAP = {m["id"]: m["provider"] for m in FLAT_MODELS}
 
 class ChatCreate(BaseModel):
     title: str = ""
@@ -92,12 +99,74 @@ class ChatUpdate(BaseModel):
 
 class MessageCreate(BaseModel):
     content: str
+    temperature: Optional[float] = None
+    max_tokens: Optional[int] = None
+    top_p: Optional[float] = None
 
-# ===== Chat Endpoints =====
+# ===== Connection & Model Endpoints =====
+
+@api_router.get("/connections")
+async def get_connections():
+    doc = await db.connections.find_one({"_id": "global"}, {"_id": 0})
+    if not doc:
+        # Default: use EMERGENT_LLM_KEY for all providers
+        default_key = os.environ.get("EMERGENT_LLM_KEY", "")
+        return {
+            "providers": {
+                "openai": {"enabled": True, "apiKey": default_key, "name": "OpenAI", "useEmergentKey": True},
+                "anthropic": {"enabled": True, "apiKey": default_key, "name": "Anthropic", "useEmergentKey": True},
+                "gemini": {"enabled": True, "apiKey": default_key, "name": "Google Gemini", "useEmergentKey": True},
+            },
+            "defaultModel": "gpt-4o",
+            "modelParams": {"temperature": 0.7, "maxTokens": 4096, "topP": 1.0},
+            "disabledModels": [],
+        }
+    return doc
+
+@api_router.put("/connections")
+async def update_connections(data: dict):
+    await db.connections.update_one(
+        {"_id": "global"},
+        {"$set": data},
+        upsert=True
+    )
+    return {"status": "ok"}
+
+class TestConnectionRequest(BaseModel):
+    provider: str
+    apiKey: str
+
+@api_router.post("/connections/test")
+async def test_connection(data: TestConnectionRequest):
+    try:
+        llm = LlmChat(
+            api_key=data.apiKey,
+            session_id=f"test-{uuid.uuid4()}",
+            system_message="Reply with exactly: CONNECTION_OK"
+        ).with_model(data.provider, None)
+        result = await llm.send_message(UserMessage(text="Say CONNECTION_OK"))
+        return {"status": "ok", "message": "Connection successful"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 @api_router.get("/models")
 async def get_models():
-    return AVAILABLE_MODELS
+    conn = await db.connections.find_one({"_id": "global"}, {"_id": 0})
+    if not conn:
+        return FLAT_MODELS
+
+    providers = conn.get("providers", {})
+    disabled = set(conn.get("disabledModels", []))
+    result = []
+    for provider_key, models in ALL_MODELS.items():
+        prov_config = providers.get(provider_key, {})
+        if prov_config.get("enabled", True):
+            for m in models:
+                model_entry = {**m, "enabled": m["id"] not in disabled}
+                result.append(model_entry)
+    return result
+
+# ===== Chat Endpoints =====
 
 @api_router.get("/chats")
 async def get_chats():
@@ -171,7 +240,26 @@ async def send_message(chat_id: str, data: MessageCreate):
     # Get LLM response
     model_id = chat.get("model", "gpt-4o")
     provider = MODEL_PROVIDER_MAP.get(model_id, "openai")
-    api_key = os.environ.get("EMERGENT_LLM_KEY", "")
+
+    # Load connection config for the correct API key and params
+    conn = await db.connections.find_one({"_id": "global"}, {"_id": 0})
+    default_key = os.environ.get("EMERGENT_LLM_KEY", "")
+
+    if conn:
+        prov_config = conn.get("providers", {}).get(provider, {})
+        if prov_config.get("useEmergentKey", True):
+            api_key = default_key
+        else:
+            api_key = prov_config.get("apiKey", default_key)
+        model_params = conn.get("modelParams", {})
+    else:
+        api_key = default_key
+        model_params = {}
+
+    # Override with per-message params if provided
+    temperature = data.temperature if data.temperature is not None else model_params.get("temperature", 0.7)
+    max_tokens = data.max_tokens if data.max_tokens is not None else model_params.get("maxTokens", 4096)
+    top_p = data.top_p if data.top_p is not None else model_params.get("topP", 1.0)
 
     try:
         # Load custom system prompt from settings
