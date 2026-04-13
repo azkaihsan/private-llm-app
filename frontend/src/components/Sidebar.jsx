@@ -3,7 +3,7 @@ import {
   Plus, Search, MessageSquare, Pencil, Trash2,
   PanelLeft, Folder, Settings, LogOut, CircleUser,
   SquarePen, EllipsisVertical, X, Archive, ChevronDown,
-  Download, Upload, ArchiveRestore, MoreHorizontal, ArrowLeft
+  Download, Upload, ArchiveRestore, MoreHorizontal, ArrowLeft, Shield
 } from 'lucide-react';
 import { useSettings } from '@/context/SettingsContext';
 
@@ -11,7 +11,8 @@ const Sidebar = ({
   chats, activeChatId, onSelectChat, onNewChat, onDeleteChat,
   onRenameChat, isOpen, onToggle, onOpenSettings,
   onArchiveChat, onExportChat, onImportChat,
-  archivedChats, onUnarchiveChat, onDeleteArchivedChat, onDeleteAllArchived, onRefreshArchived
+  archivedChats, onUnarchiveChat, onDeleteArchivedChat, onDeleteAllArchived, onRefreshArchived,
+  user, isAdmin, onLogout, onOpenUserManagement
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -328,25 +329,31 @@ const Sidebar = ({
           <button
             onClick={() => setShowUserMenu(!showUserMenu)}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-white/5 text-neutral-300 hover:text-white transition-colors"
+            data-testid="user-menu-button"
           >
             <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white text-xs font-semibold">
-              U
+              {user?.name?.charAt(0)?.toUpperCase() || 'U'}
             </div>
-            <span className="text-sm flex-1 text-left">User</span>
+            <span className="text-sm flex-1 text-left truncate">{user?.name || 'User'}</span>
             <EllipsisVertical size={16} className="text-neutral-500" />
           </button>
           {showUserMenu && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
               <div className="absolute bottom-full left-0 w-full mb-1 bg-[#2f2f2f] rounded-xl shadow-xl border border-white/10 overflow-hidden z-50">
-                <button onClick={() => { onOpenSettings && onOpenSettings(); setShowUserMenu(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-neutral-300 text-sm">
+                <button onClick={() => { onOpenSettings && onOpenSettings(); setShowUserMenu(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-neutral-300 text-sm" data-testid="settings-menu-btn">
                   <Settings size={16} /> Settings
                 </button>
-                <button onClick={handleOpenArchived} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-neutral-300 text-sm">
+                {isAdmin && (
+                  <button onClick={() => { onOpenUserManagement && onOpenUserManagement(); setShowUserMenu(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-neutral-300 text-sm" data-testid="user-management-btn">
+                    <Shield size={16} /> User Management
+                  </button>
+                )}
+                <button onClick={handleOpenArchived} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-neutral-300 text-sm" data-testid="archived-chats-btn">
                   <Archive size={16} /> Archived Chats
                 </button>
                 <div className="border-t border-white/10" />
-                <button className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-red-400 text-sm">
+                <button onClick={() => { onLogout && onLogout(); setShowUserMenu(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-red-400 text-sm" data-testid="sign-out-btn">
                   <LogOut size={16} /> Sign Out
                 </button>
               </div>

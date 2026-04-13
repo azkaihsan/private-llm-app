@@ -10,8 +10,8 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
 const tabs = [
-  { id: 'connections', label: 'Connections', icon: Link2 },
-  { id: 'models', label: 'Models', icon: Cpu },
+  { id: 'connections', label: 'Connections', icon: Link2, adminOnly: true },
+  { id: 'models', label: 'Models', icon: Cpu, adminOnly: true },
   { id: 'general', label: 'General', icon: Settings },
   { id: 'theme', label: 'Theme', icon: Palette },
   { id: 'system', label: 'System Prompt', icon: MessageSquare },
@@ -29,9 +29,9 @@ const PROVIDER_INFO = {
   openai_compatible: { name: 'OpenAI Compatible', color: '#8b5cf6', supportsEmergent: false, hasBaseUrl: true, hasCustomModels: true },
 };
 
-const SettingsModal = ({ open, onClose, onModelsChanged }) => {
+const SettingsModal = ({ open, onClose, onModelsChanged, isAdmin }) => {
   const { settings, updateSettings, resetSettings, themePresets } = useSettings();
-  const [activeTab, setActiveTab] = useState('connections');
+  const [activeTab, setActiveTab] = useState(isAdmin ? 'connections' : 'general');
   const [localSettings, setLocalSettings] = useState(settings);
   const fileInputRef = useRef(null);
 
@@ -208,7 +208,7 @@ const SettingsModal = ({ open, onClose, onModelsChanged }) => {
           <div className="flex flex-1 min-h-0">
             {/* Tab Navigation */}
             <div className="w-44 shrink-0 p-3 space-y-0.5" style={{ borderRight: `1px solid ${isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.08)'}` }}>
-              {tabs.map(tab => {
+              {tabs.filter(tab => !tab.adminOnly || isAdmin).map(tab => {
                 const Icon = tab.icon;
                 return (
                   <button

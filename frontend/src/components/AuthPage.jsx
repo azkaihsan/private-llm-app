@@ -46,11 +46,12 @@ const AuthPage = () => {
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" data-testid="auth-form">
           {mode === 'signup' && (
             <div>
               <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Name</label>
               <input
+                data-testid="auth-name-input"
                 type="text"
                 value={name}
                 onChange={e => setName(e.target.value)}
@@ -64,6 +65,7 @@ const AuthPage = () => {
           <div>
             <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Email</label>
             <input
+              data-testid="auth-email-input"
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
@@ -77,6 +79,7 @@ const AuthPage = () => {
             <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Password</label>
             <div className="relative">
               <input
+                data-testid="auth-password-input"
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={e => setPassword(e.target.value)}
@@ -100,6 +103,7 @@ const AuthPage = () => {
           <button
             type="submit"
             disabled={loading}
+            data-testid="auth-submit-button"
             className="w-full rounded-xl px-4 py-3 text-sm font-semibold transition-colors flex items-center justify-center gap-2"
             style={{ backgroundColor: settings.accentColor, color: isLightBg(settings.accentColor) ? '#000' : '#fff', opacity: loading ? 0.7 : 1 }}
           >
@@ -115,6 +119,7 @@ const AuthPage = () => {
             onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(''); }}
             className="font-medium underline transition-colors"
             style={{ color: settings.accentColor }}
+            data-testid="auth-toggle-mode"
           >
             {mode === 'login' ? 'Sign up' : 'Sign in'}
           </button>

@@ -5,9 +5,12 @@ import WelcomeScreen from "@/components/WelcomeScreen";
 import ChatArea from "@/components/ChatArea";
 import ChatInput from "@/components/ChatInput";
 import SettingsModal from "@/components/SettingsModal";
+import UserManagement from "@/components/UserManagement";
+import AuthPage from "@/components/AuthPage";
 import { SettingsProvider, useSettings } from "@/context/SettingsContext";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { suggestions } from "@/data/mockData";
-import { PanelLeft, SquarePen, ChevronDown, Check, Search } from "lucide-react";
+import { PanelLeft, SquarePen, ChevronDown, Check, Search, Loader2 } from "lucide-react";
 import axios from "axios";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -15,6 +18,7 @@ const API = `${BACKEND_URL}/api`;
 
 function AppContent() {
   const { settings } = useSettings();
+  const { user, isAdmin, logout } = useAuth();
   const [chats, setChats] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -25,6 +29,7 @@ function AppContent() {
   const [modelSearch, setModelSearch] = useState("");
   const [activeMessages, setActiveMessages] = useState([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [userMgmtOpen, setUserMgmtOpen] = useState(false);
 
   // Fetch models on mount
   const fetchModels = useCallback(async () => {
@@ -250,6 +255,10 @@ function AppContent() {
         onDeleteArchivedChat={deleteArchivedChat}
         onDeleteAllArchived={deleteAllArchived}
         onRefreshArchived={fetchArchivedChats}
+        user={user}
+        isAdmin={isAdmin}
+        onLogout={logout}
+        onOpenUserManagement={() => setUserMgmtOpen(true)}
       />
 
       <div className="flex-1 flex flex-col min-w-0 relative">
@@ -329,15 +338,34 @@ function AppContent() {
         />
       </div>
 
-      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} onModelsChanged={fetchModels} />
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} onModelsChanged={fetchModels} isAdmin={isAdmin} />
+      {isAdmin && <UserManagement open={userMgmtOpen} onClose={() => setUserMgmtOpen(false)} />}
     </div>
   );
+}
+
+function AuthGate() {
+  const { user, loading } = useAuth();
+  const { settings } = useSettings();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: settings.mainBg }}>
+        <Loader2 size={32} className="animate-spin" style={{ color: settings.accentColor }} />
+      </div>
+    );
+  }
+
+  if (!user) return <AuthPage />;
+  return <AppContent />;
 }
 
 function App() {
   return (
     <SettingsProvider>
-      <AppContent />
+      <AuthProvider>
+        <AuthGate />
+      </AuthProvider>
     </SettingsProvider>
   );
 }
