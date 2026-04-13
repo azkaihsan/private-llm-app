@@ -37,9 +37,14 @@ function AppContent() {
       const res = await axios.get(`${API}/models`);
       const enabledModels = res.data.filter(m => m.enabled !== false);
       setModels(enabledModels);
-      // Try to load default model from connections
-      const connRes = await axios.get(`${API}/connections`);
-      const defaultModelId = connRes.data?.defaultModel;
+
+      // Try to load default model from connections (admin-only, may 403)
+      let defaultModelId = null;
+      try {
+        const connRes = await axios.get(`${API}/connections`);
+        defaultModelId = connRes.data?.defaultModel;
+      } catch (_) {}
+
       const defaultModel = enabledModels.find(m => m.id === defaultModelId);
       if (defaultModel) setSelectedModel(defaultModel);
       else if (enabledModels.length > 0 && !selectedModel) setSelectedModel(enabledModels[0]);
