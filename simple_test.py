@@ -6,7 +6,7 @@ Simplified test to verify the core functionality
 import requests
 import json
 
-BACKEND_URL = "https://ui-replica-36.preview.emergentagent.com/api"
+BACKEND_URL = "https://jwt-rbac-setup.preview.emergentagent.com/api"
 
 def test_core_functionality():
     print("🧪 Testing Core Provider Support Functionality")

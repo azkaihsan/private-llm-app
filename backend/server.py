@@ -1,4 +1,5 @@
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -8,9 +9,11 @@ from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 import litellm
+import jwt
+from passlib.context import CryptContext
 
 
 ROOT_DIR = Path(__file__).parent
@@ -26,6 +29,60 @@ app = FastAPI()
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
+
+# ===== Auth Config =====
+JWT_SECRET = os.environ.get("JWT_SECRET", "openwebui-clone-secret-key-change-in-production")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRY_HOURS = 72
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+security = HTTPBearer(auto_error=False)
+
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+def verify_password(plain: str, hashed: str) -> bool:
+    return pwd_context.verify(plain, hashed)
+
+def create_token(user_id: str, role: str) -> str:
+    payload = {
+        "sub": user_id,
+        "role": role,
+        "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRY_HOURS),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+def decode_token(token: str) -> dict:
+    try:
+        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    payload = decode_token(credentials.credentials)
+    user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
+
+async def get_admin_user(user=Depends(get_current_user)):
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+# Optional auth - returns user or None
+async def get_optional_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    if not credentials:
+        return None
+    try:
+        payload = decode_token(credentials.credentials)
+        user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
+        return user
+    except Exception:
+        return None
 
 
 # Define Models
@@ -67,6 +124,135 @@ async def get_status_checks():
             check['timestamp'] = datetime.fromisoformat(check['timestamp'])
     
     return status_checks
+
+# ===== Auth Endpoints =====
+
+class SignupRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+@api_router.post("/auth/signup")
+async def signup(data: SignupRequest):
+    existing = await db.users.find_one({"email": data.email.lower()})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    # First user becomes admin
+    user_count = await db.users.count_documents({})
+    role = "admin" if user_count == 0 else "user"
+
+    user = {
+        "id": str(uuid.uuid4()),
+        "name": data.name,
+        "email": data.email.lower(),
+        "password_hash": hash_password(data.password),
+        "role": role,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.users.insert_one({**user, "_id": user["id"]})
+    token = create_token(user["id"], user["role"])
+    return {
+        "token": token,
+        "user": {"id": user["id"], "name": user["name"], "email": user["email"], "role": user["role"]},
+    }
+
+@api_router.post("/auth/login")
+async def login(data: LoginRequest):
+    user = await db.users.find_one({"email": data.email.lower()})
+    if not user or not verify_password(data.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    token = create_token(user["id"], user["role"])
+    return {
+        "token": token,
+        "user": {"id": user["id"], "name": user["name"], "email": user["email"], "role": user["role"]},
+    }
+
+@api_router.get("/auth/me")
+async def get_me(user=Depends(get_current_user)):
+    return user
+
+# ===== Admin: User Management =====
+
+class AdminCreateUser(BaseModel):
+    name: str
+    email: str
+    password: str
+    role: str = "user"
+
+class AdminUpdateUser(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    role: Optional[str] = None
+    password: Optional[str] = None
+
+@api_router.get("/admin/users")
+async def admin_list_users(admin=Depends(get_admin_user)):
+    users = await db.users.find({}, {"_id": 0, "password_hash": 0}).sort("created_at", -1).to_list(500)
+    return users
+
+@api_router.post("/admin/users")
+async def admin_create_user(data: AdminCreateUser, admin=Depends(get_admin_user)):
+    existing = await db.users.find_one({"email": data.email.lower()})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    if data.role not in ("admin", "user"):
+        raise HTTPException(status_code=400, detail="Role must be 'admin' or 'user'")
+
+    user = {
+        "id": str(uuid.uuid4()),
+        "name": data.name,
+        "email": data.email.lower(),
+        "password_hash": hash_password(data.password),
+        "role": data.role,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.users.insert_one({**user, "_id": user["id"]})
+    return {"id": user["id"], "name": user["name"], "email": user["email"], "role": user["role"], "created_at": user["created_at"]}
+
+@api_router.put("/admin/users/{user_id}")
+async def admin_update_user(user_id: str, data: AdminUpdateUser, admin=Depends(get_admin_user)):
+    update = {}
+    if data.name is not None:
+        update["name"] = data.name
+    if data.email is not None:
+        existing = await db.users.find_one({"email": data.email.lower(), "id": {"$ne": user_id}})
+        if existing:
+            raise HTTPException(status_code=400, detail="Email already in use")
+        update["email"] = data.email.lower()
+    if data.role is not None:
+        if data.role not in ("admin", "user"):
+            raise HTTPException(status_code=400, detail="Role must be 'admin' or 'user'")
+        update["role"] = data.role
+    if data.password is not None:
+        update["password_hash"] = hash_password(data.password)
+
+    if not update:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    result = await db.users.update_one({"id": user_id}, {"$set": update})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"status": "ok"}
+
+@api_router.delete("/admin/users/{user_id}")
+async def admin_delete_user(user_id: str, admin=Depends(get_admin_user)):
+    if admin["id"] == user_id:
+        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+    result = await db.users.delete_one({"id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    # Also delete user's chats and messages
+    user_chats = await db.chats.find({"user_id": user_id}, {"id": 1}).to_list(1000)
+    for chat in user_chats:
+        await db.messages.delete_many({"chat_id": chat["id"]})
+    await db.chats.delete_many({"user_id": user_id})
+    return {"status": "ok"}
 
 # Include the router in the main app - moved to after all routes are defined
 
@@ -142,7 +328,7 @@ class MessageCreate(BaseModel):
 # ===== Connection & Model Endpoints =====
 
 @api_router.get("/connections")
-async def get_connections():
+async def get_connections(admin=Depends(get_admin_user)):
     doc = await db.connections.find_one({"_id": "global"}, {"_id": 0})
     if not doc:
         default_key = os.environ.get("EMERGENT_LLM_KEY", "")
@@ -165,7 +351,7 @@ async def get_connections():
     return doc
 
 @api_router.put("/connections")
-async def update_connections(data: dict):
+async def update_connections(data: dict, admin=Depends(get_admin_user)):
     await db.connections.update_one(
         {"_id": "global"},
         {"$set": data},
@@ -178,7 +364,7 @@ class TestConnectionRequest(BaseModel):
     apiKey: str
 
 @api_router.post("/connections/test")
-async def test_connection(data: TestConnectionRequest):
+async def test_connection(data: TestConnectionRequest, admin=Depends(get_admin_user)):
     try:
         llm = LlmChat(
             api_key=data.apiKey,
@@ -234,29 +420,30 @@ async def get_models():
 # ===== Chat Endpoints =====
 
 @api_router.get("/chats")
-async def get_chats():
-    chats = await db.chats.find({"archived": {"$ne": True}}, {"_id": 0}).sort("created_at", -1).to_list(100)
+async def get_chats(user=Depends(get_current_user)):
+    chats = await db.chats.find({"user_id": user["id"], "archived": {"$ne": True}}, {"_id": 0}).sort("created_at", -1).to_list(100)
     return chats
 
 @api_router.post("/chats")
-async def create_chat(data: ChatCreate):
+async def create_chat(data: ChatCreate, user=Depends(get_current_user)):
     chat = {
         "id": str(uuid.uuid4()),
         "title": data.title or "New Chat",
         "model": data.model,
+        "user_id": user["id"],
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.chats.insert_one({**chat, "_id": chat["id"]})
     return chat
 
 @api_router.get("/chats/archived")
-async def get_archived_chats():
-    chats = await db.chats.find({"archived": True}, {"_id": 0}).sort("created_at", -1).to_list(100)
+async def get_archived_chats(user=Depends(get_current_user)):
+    chats = await db.chats.find({"user_id": user["id"], "archived": True}, {"_id": 0}).sort("created_at", -1).to_list(100)
     return chats
 
 @api_router.get("/chats/{chat_id}")
-async def get_chat(chat_id: str):
-    chat = await db.chats.find_one({"id": chat_id}, {"_id": 0})
+async def get_chat(chat_id: str, user=Depends(get_current_user)):
+    chat = await db.chats.find_one({"id": chat_id, "user_id": user["id"]}, {"_id": 0})
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
     messages = await db.messages.find(
@@ -266,21 +453,21 @@ async def get_chat(chat_id: str):
     return chat
 
 @api_router.put("/chats/{chat_id}")
-async def update_chat(chat_id: str, data: ChatUpdate):
-    result = await db.chats.update_one({"id": chat_id}, {"$set": {"title": data.title}})
+async def update_chat(chat_id: str, data: ChatUpdate, user=Depends(get_current_user)):
+    result = await db.chats.update_one({"id": chat_id, "user_id": user["id"]}, {"$set": {"title": data.title}})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Chat not found")
     return {"status": "ok"}
 
 @api_router.delete("/chats/{chat_id}")
-async def delete_chat(chat_id: str):
-    await db.chats.delete_one({"id": chat_id})
+async def delete_chat(chat_id: str, user=Depends(get_current_user)):
+    await db.chats.delete_one({"id": chat_id, "user_id": user["id"]})
     await db.messages.delete_many({"chat_id": chat_id})
     return {"status": "ok"}
 
 @api_router.post("/chats/{chat_id}/messages")
-async def send_message(chat_id: str, data: MessageCreate):
-    chat = await db.chats.find_one({"id": chat_id}, {"_id": 0})
+async def send_message(chat_id: str, data: MessageCreate, user=Depends(get_current_user)):
+    chat = await db.chats.find_one({"id": chat_id, "user_id": user["id"]}, {"_id": 0})
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
 
@@ -410,22 +597,22 @@ async def send_message(chat_id: str, data: MessageCreate):
 # ===== Archive, Export, Import Endpoints =====
 
 @api_router.put("/chats/{chat_id}/archive")
-async def archive_chat(chat_id: str):
-    result = await db.chats.update_one({"id": chat_id}, {"$set": {"archived": True}})
+async def archive_chat(chat_id: str, user=Depends(get_current_user)):
+    result = await db.chats.update_one({"id": chat_id, "user_id": user["id"]}, {"$set": {"archived": True}})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Chat not found")
     return {"status": "ok"}
 
 @api_router.put("/chats/{chat_id}/unarchive")
-async def unarchive_chat(chat_id: str):
-    result = await db.chats.update_one({"id": chat_id}, {"$set": {"archived": False}})
+async def unarchive_chat(chat_id: str, user=Depends(get_current_user)):
+    result = await db.chats.update_one({"id": chat_id, "user_id": user["id"]}, {"$set": {"archived": False}})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Chat not found")
     return {"status": "ok"}
 
 @api_router.get("/chats/{chat_id}/export")
-async def export_chat(chat_id: str):
-    chat = await db.chats.find_one({"id": chat_id}, {"_id": 0})
+async def export_chat(chat_id: str, user=Depends(get_current_user)):
+    chat = await db.chats.find_one({"id": chat_id, "user_id": user["id"]}, {"_id": 0})
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
     messages = await db.messages.find({"chat_id": chat_id}, {"_id": 0}).sort("timestamp", 1).to_list(1000)
@@ -443,12 +630,13 @@ class ChatImport(BaseModel):
     messages: list
 
 @api_router.post("/chats/import")
-async def import_chat(data: ChatImport):
+async def import_chat(data: ChatImport, user=Depends(get_current_user)):
     new_chat_id = str(uuid.uuid4())
     chat_data = {
         "id": new_chat_id,
         "title": data.chat.get("title", "Imported Chat"),
         "model": data.chat.get("model", "gpt-4o"),
+        "user_id": user["id"],
         "created_at": datetime.now(timezone.utc).isoformat(),
         "archived": False,
     }
@@ -467,11 +655,11 @@ async def import_chat(data: ChatImport):
     return {"status": "ok", "chat_id": new_chat_id, "chat": chat_data}
 
 @api_router.delete("/chats/archived/all")
-async def delete_all_archived():
-    archived = await db.chats.find({"archived": True}, {"id": 1, "_id": 0}).to_list(1000)
+async def delete_all_archived(user=Depends(get_current_user)):
+    archived = await db.chats.find({"user_id": user["id"], "archived": True}, {"id": 1, "_id": 0}).to_list(1000)
     for chat in archived:
         await db.messages.delete_many({"chat_id": chat["id"]})
-    await db.chats.delete_many({"archived": True})
+    await db.chats.delete_many({"user_id": user["id"], "archived": True})
     return {"status": "ok", "deleted_count": len(archived)}
 
 # ===== Settings Endpoints =====
