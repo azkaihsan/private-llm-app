@@ -174,8 +174,8 @@ const ChatInput = forwardRef(({ onSend, isTyping, placeholder }, ref) => {
   const hasContent = message.trim() || attachedFiles.length > 0;
 
   return (
-    <div className="w-full max-w-3xl mx-auto px-4 pb-4">
-      <div className="relative rounded-3xl shadow-lg" style={{ backgroundColor: settings.inputBg }}>
+    <div className="w-full max-w-3xl mx-auto px-2 sm:px-4 pb-3 sm:pb-4">
+      <div className="relative rounded-2xl sm:rounded-3xl shadow-lg" style={{ backgroundColor: settings.inputBg }}>
         {/* Attached Files Preview */}
         {attachedFiles.length > 0 && (
           <div className="flex flex-wrap gap-2 px-3 pt-3 pb-1">

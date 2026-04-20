@@ -138,9 +138,9 @@ const MessageBubble = ({ message, isTyping }) => {
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
     >
-      <div className={`flex gap-4 ${isUser ? 'flex-row-reverse max-w-[85%]' : 'max-w-full'}`}>
+      <div className={`flex gap-2 sm:gap-4 ${isUser ? 'flex-row-reverse max-w-[92%] sm:max-w-[85%]' : 'max-w-full'}`}>
         {!isUser && (
-          <LogoPreview settings={settings} size={28} className="mt-1" />
+          <LogoPreview settings={settings} size={28} className="mt-1 hidden sm:flex" />
         )}
         <div className="flex flex-col min-w-0 flex-1">
           <div style={{ fontSize: `${settings.fontSize}px` }} className={`leading-relaxed ${
@@ -208,7 +208,7 @@ const ChatArea = ({ messages, isTyping }) => {
 
   return (
     <div ref={scrollRef} className="flex-1 overflow-y-auto">
-      <div className="max-w-3xl mx-auto px-4 py-4">
+      <div className="max-w-3xl mx-auto px-2 sm:px-4 py-2 sm:py-4">
         {messages.map(msg => (
           <MessageBubble key={msg.id} message={msg} />
         ))}

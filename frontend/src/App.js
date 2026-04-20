@@ -16,12 +16,22 @@ import axios from "axios";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+  return isMobile;
+}
+
 function AppContent() {
   const { settings } = useSettings();
   const { user, isAdmin, logout } = useAuth();
   const [chats, setChats] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 768);
   const [selectedModel, setSelectedModel] = useState(null);
   const [models, setModels] = useState([]);
   const [isTyping, setIsTyping] = useState(false);
@@ -33,6 +43,7 @@ function AppContent() {
   const [isDragging, setIsDragging] = useState(false);
   const dragCounterRef = useRef(0);
   const chatInputRef = useRef(null);
+  const isMobile = useIsMobile();
 
   // Fetch models on mount
   const fetchModels = useCallback(async () => {
@@ -98,6 +109,7 @@ function AppContent() {
   const selectChat = useCallback((chatId) => {
     setActiveChatId(chatId);
     setIsTyping(false);
+    if (window.innerWidth < 768) setSidebarOpen(false);
   }, []);
 
   const deleteChat = useCallback(async (chatId) => {
@@ -282,7 +294,14 @@ function AppContent() {
 
   return (
     <div className="App flex h-screen text-white overflow-hidden" style={{ backgroundColor: settings.mainBg, color: 'var(--text-primary)' }}>
-      <Sidebar
+      {/* Mobile sidebar backdrop */}
+      {isMobile && sidebarOpen && (
+        <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setSidebarOpen(false)} />
+      )}
+
+      {/* Sidebar: overlay on mobile, inline on desktop */}
+      <div className={`${isMobile ? 'fixed inset-y-0 left-0 z-50' : ''} ${isMobile && !sidebarOpen ? '-translate-x-full' : 'translate-x-0'} transition-transform duration-200`}>
+        <Sidebar
         chats={chats}
         activeChatId={activeChatId}
         onSelectChat={selectChat}
@@ -305,6 +324,7 @@ function AppContent() {
         onLogout={logout}
         onOpenUserManagement={() => setUserMgmtOpen(true)}
       />
+      </div>
 
       <div
         className="flex-1 flex flex-col min-w-0 relative"
@@ -323,13 +343,13 @@ function AppContent() {
             </div>
           </div>
         )}
-        <div className="flex items-center gap-2 p-2 shrink-0">
-          {!sidebarOpen && (
+        <div className="flex items-center gap-1 sm:gap-2 p-2 shrink-0">
+          {(!sidebarOpen || isMobile) && (
             <div className="flex items-center gap-0.5">
-              <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-lg hover:bg-white/5 text-neutral-400 hover:text-white transition-colors">
+              <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-lg hover:bg-white/5 text-neutral-400 hover:text-white transition-colors" data-testid="toggle-sidebar-btn">
                 <PanelLeft size={20} />
               </button>
-              <button onClick={createNewChat} className="p-2 rounded-lg hover:bg-white/5 text-neutral-400 hover:text-white transition-colors">
+              <button onClick={createNewChat} className="p-2 rounded-lg hover:bg-white/5 text-neutral-400 hover:text-white transition-colors" data-testid="new-chat-btn">
                 <SquarePen size={20} />
               </button>
             </div>

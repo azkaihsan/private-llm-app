@@ -187,9 +187,9 @@ const SettingsModal = ({ open, onClose, onModelsChanged, isAdmin }) => {
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-0 sm:p-4" onClick={onClose}>
         <div
-          className="w-full max-w-2xl rounded-2xl shadow-2xl border overflow-hidden flex flex-col max-h-[85vh]"
+          className="w-full h-full sm:h-auto sm:max-w-2xl sm:rounded-2xl shadow-2xl border overflow-hidden flex flex-col sm:max-h-[85vh]"
           style={{
             backgroundColor: localSettings.inputBg || '#2f2f2f',
             borderColor: isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.1)',
@@ -205,16 +205,16 @@ const SettingsModal = ({ open, onClose, onModelsChanged, isAdmin }) => {
             </button>
           </div>
 
-          <div className="flex flex-1 min-h-0">
-            {/* Tab Navigation */}
-            <div className="w-44 shrink-0 p-3 space-y-0.5" style={{ borderRight: `1px solid ${isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.08)'}` }}>
+          <div className="flex flex-col sm:flex-row flex-1 min-h-0">
+            {/* Tab Navigation - horizontal on mobile, vertical on desktop */}
+            <div className="shrink-0 p-2 sm:p-3 sm:w-44 flex sm:flex-col gap-1 sm:gap-0.5 overflow-x-auto sm:overflow-visible border-b sm:border-b-0 sm:border-r" style={{ borderColor: isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.08)' }}>
               {tabs.filter(tab => !tab.adminOnly || isAdmin).map(tab => {
                 const Icon = tab.icon;
                 return (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+                    className="w-full flex items-center gap-2 sm:gap-2.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap"
                     style={{
                       backgroundColor: activeTab === tab.id ? (isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)') : 'transparent',
                       color: activeTab === tab.id ? (isLight ? '#000' : '#fff') : (isLight ? '#555' : '#999'),
@@ -228,7 +228,7 @@ const SettingsModal = ({ open, onClose, onModelsChanged, isAdmin }) => {
             </div>
 
             {/* Tab Content */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
 
               {/* ===== CONNECTIONS TAB ===== */}
               {activeTab === 'connections' && connections && (
@@ -664,9 +664,9 @@ const SettingsModal = ({ open, onClose, onModelsChanged, isAdmin }) => {
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between px-6 py-4" style={{ borderTop: `1px solid ${isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.08)'}` }}>
-            <button onClick={handleReset} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors" style={{ color: isLight ? '#666' : '#999' }}>
-              <RotateCcw size={14} /> Reset to Defaults
+          <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4" style={{ borderTop: `1px solid ${isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.08)'}` }}>
+            <button onClick={handleReset} className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm transition-colors" style={{ color: isLight ? '#666' : '#999' }}>
+              <RotateCcw size={14} /> <span className="hidden sm:inline">Reset to Defaults</span><span className="sm:hidden">Reset</span>
             </button>
             <div className="flex gap-2">
               <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm transition-colors" style={{ backgroundColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)', color: isLight ? '#333' : '#ccc' }}>
