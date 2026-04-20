@@ -13,7 +13,7 @@ import uuid
 import base64
 import io
 from datetime import datetime, timezone, timedelta
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
 import litellm
 import jwt
 from passlib.context import CryptContext
@@ -625,7 +625,7 @@ async def send_message(chat_id: str, data: MessageCreate, user=Depends(get_curre
                 if file_rec.get("is_image", False):
                     b64 = base64.b64encode(file_data).decode("utf-8")
                     mime = file_rec["content_type"] or "image/png"
-                    image_b64_list.append(f"data:{mime};base64,{b64}")
+                    image_b64_list.append({"b64": b64, "mime": mime})
                 else:
                     text = extract_text_from_file(file_data, file_rec["original_filename"], file_rec["content_type"])
                     if text:
@@ -699,7 +699,8 @@ async def send_message(chat_id: str, data: MessageCreate, user=Depends(get_curre
             ).with_model(provider, model_id)
 
             if image_b64_list:
-                user_message = UserMessage(text=user_prompt or "What do you see in this image?", images=image_b64_list)
+                file_contents = [ImageContent(image_base64=img["b64"]) for img in image_b64_list]
+                user_message = UserMessage(text=user_prompt or "What do you see in this image?", file_contents=file_contents)
             else:
                 user_message = UserMessage(text=user_prompt)
             response_text = await llm.send_message(user_message)
@@ -714,8 +715,8 @@ async def send_message(chat_id: str, data: MessageCreate, user=Depends(get_curre
                 content_parts = []
                 if user_prompt:
                     content_parts.append({"type": "text", "text": user_prompt})
-                for img_url in image_b64_list:
-                    content_parts.append({"type": "image_url", "image_url": {"url": img_url}})
+                for img in image_b64_list:
+                    content_parts.append({"type": "image_url", "image_url": {"url": f"data:{img['mime']};base64,{img['b64']}"}})
                 messages_for_llm.append({"role": "user", "content": content_parts})
             else:
                 messages_for_llm.append({"role": "user", "content": user_prompt})
