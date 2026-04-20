@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import "@/App.css";
 import Sidebar from "@/components/Sidebar";
 import WelcomeScreen from "@/components/WelcomeScreen";
@@ -10,7 +10,7 @@ import AuthPage from "@/components/AuthPage";
 import { SettingsProvider, useSettings } from "@/context/SettingsContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { suggestions } from "@/data/mockData";
-import { PanelLeft, SquarePen, ChevronDown, Check, Search, Loader2 } from "lucide-react";
+import { PanelLeft, SquarePen, ChevronDown, Check, Search, Loader2, Upload } from "lucide-react";
 import axios from "axios";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -30,6 +30,9 @@ function AppContent() {
   const [activeMessages, setActiveMessages] = useState([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [userMgmtOpen, setUserMgmtOpen] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragCounterRef = useRef(0);
+  const chatInputRef = useRef(null);
 
   // Fetch models on mount
   const fetchModels = useCallback(async () => {
@@ -242,6 +245,41 @@ function AppContent() {
     m.name.toLowerCase().includes(modelSearch.toLowerCase())
   );
 
+  // Drag-and-drop handlers for the main content area
+  const handleDragEnter = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current++;
+    if (e.dataTransfer?.types?.includes('Files')) {
+      setIsDragging(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current--;
+    if (dragCounterRef.current === 0) {
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    dragCounterRef.current = 0;
+    const files = Array.from(e.dataTransfer?.files || []);
+    if (files.length > 0 && chatInputRef.current?.addFiles) {
+      chatInputRef.current.addFiles(files);
+    }
+  }, []);
+
   return (
     <div className="App flex h-screen text-white overflow-hidden" style={{ backgroundColor: settings.mainBg, color: 'var(--text-primary)' }}>
       <Sidebar
@@ -268,7 +306,23 @@ function AppContent() {
         onOpenUserManagement={() => setUserMgmtOpen(true)}
       />
 
-      <div className="flex-1 flex flex-col min-w-0 relative">
+      <div
+        className="flex-1 flex flex-col min-w-0 relative"
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+      >
+        {/* Drag overlay */}
+        {isDragging && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm pointer-events-none" data-testid="drag-overlay">
+            <div className="flex flex-col items-center gap-3 p-8 rounded-2xl border-2 border-dashed" style={{ borderColor: settings.accentColor, backgroundColor: 'rgba(0,0,0,0.4)' }}>
+              <Upload size={40} style={{ color: settings.accentColor }} />
+              <span className="text-lg font-medium" style={{ color: settings.accentColor }}>Drop files here</span>
+              <span className="text-sm text-neutral-400">Images, documents, code files...</span>
+            </div>
+          </div>
+        )}
         <div className="flex items-center gap-2 p-2 shrink-0">
           {!sidebarOpen && (
             <div className="flex items-center gap-0.5">
@@ -339,6 +393,7 @@ function AppContent() {
         )}
 
         <ChatInput
+          ref={chatInputRef}
           onSend={sendMessage}
           isTyping={isTyping}
           placeholder={activeChatId ? "Ask a follow-up..." : "Ask anything"}

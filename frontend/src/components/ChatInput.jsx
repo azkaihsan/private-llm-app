@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { ArrowUp, Plus, Mic, X, FileText, Image, File, Loader2, CircleStop, MicOff } from 'lucide-react';
 import { useSettings } from '@/context/SettingsContext';
 import axios from 'axios';
@@ -33,7 +33,7 @@ function formatSize(bytes) {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
-const ChatInput = ({ onSend, isTyping, placeholder }) => {
+const ChatInput = forwardRef(({ onSend, isTyping, placeholder }, ref) => {
   const [message, setMessage] = useState('');
   const [attachedFiles, setAttachedFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
@@ -68,11 +68,9 @@ const ChatInput = ({ onSend, isTyping, placeholder }) => {
     }
   };
 
-  const handleFileSelect = async (e) => {
-    const files = Array.from(e.target.files || []);
+  // Shared upload logic
+  const uploadFileList = useCallback(async (files) => {
     if (files.length === 0) return;
-    e.target.value = '';
-
     setUploading(true);
     const uploaded = [];
     for (const file of files) {
@@ -95,7 +93,19 @@ const ChatInput = ({ onSend, isTyping, placeholder }) => {
     setAttachedFiles(prev => [...prev, ...uploaded]);
     setUploading(false);
     textareaRef.current?.focus();
+  }, []);
+
+  const handleFileSelect = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    e.target.value = '';
+    await uploadFileList(files);
   };
+
+  // Expose addFiles for drag-and-drop from parent
+  useImperativeHandle(ref, () => ({
+    addFiles: (files) => uploadFileList(Array.from(files)),
+  }), [uploadFileList]);
 
   const removeFile = (fileId) => {
     setAttachedFiles(prev => prev.filter(f => f.id !== fileId));
@@ -278,6 +288,6 @@ const ChatInput = ({ onSend, isTyping, placeholder }) => {
       </p>
     </div>
   );
-};
+});
 
 export default ChatInput;
