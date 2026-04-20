@@ -12,6 +12,7 @@ from auth import get_current_user
 from storage import get_object, extract_text_from_file, web_search
 from models import (
     ChatCreate, ChatUpdate, MessageCreate, ChatImport,
+    EditMessageRequest, RegenerateRequest,
     ALL_MODELS, EMERGENT_PROVIDERS, PROVIDER_BASE_URLS, MODEL_PROVIDER_MAP,
 )
 
@@ -252,6 +253,180 @@ async def send_message(chat_id: str, data: MessageCreate, user=Depends(get_curre
         "user_message": {k: v for k, v in user_msg.items() if k != "_id"},
         "assistant_message": {k: v for k, v in ai_msg.items() if k != "_id"},
     }
+
+
+# ===== Shared LLM helper =====
+
+async def _generate_llm_response(chat_id: str, user_prompt: str, image_b64_list: list, model_id: str):
+    """Generate an LLM response for the given prompt in the given chat context."""
+    provider = MODEL_PROVIDER_MAP.get(model_id, "openai")
+    if provider == "openai_compatible" or (model_id.startswith("openai/") and provider not in EMERGENT_PROVIDERS):
+        provider = "openai_compatible"
+
+    conn = await db.connections.find_one({"_id": "global"}, {"_id": 0})
+    default_key = os.environ.get("EMERGENT_LLM_KEY", "")
+
+    if conn:
+        prov_config = conn.get("providers", {}).get(provider, {})
+        if prov_config.get("useEmergentKey", True) and provider in EMERGENT_PROVIDERS:
+            api_key = default_key
+        else:
+            api_key = prov_config.get("apiKey", "")
+        model_params = conn.get("modelParams", {})
+    else:
+        api_key = default_key
+        model_params = {}
+
+    temperature = model_params.get("temperature", 0.7)
+    max_tokens = model_params.get("maxTokens", 4096)
+    top_p = model_params.get("topP", 1.0)
+
+    search_context = ""
+    if user_prompt.strip():
+        search_context = web_search(user_prompt[:200], max_results=5)
+
+    try:
+        app_settings = await db.app_settings.find_one({"_id": "global"}, {"_id": 0})
+        base_system_prompt = (app_settings or {}).get("systemPrompt", "You are a helpful AI assistant. You provide clear, accurate, and well-formatted responses using markdown when appropriate.")
+        if search_context:
+            system_prompt = base_system_prompt + "\n\nYou have access to recent web search results. Use them to provide up-to-date, accurate information. Cite sources when relevant using [Source](url) format.\n\n--- Web Search Results ---\n" + search_context + "\n--- End of Search Results ---"
+        else:
+            system_prompt = base_system_prompt
+
+        history_msgs = await db.messages.find({"chat_id": chat_id}, {"_id": 0}).sort("timestamp", 1).to_list(50)
+
+        if provider in EMERGENT_PROVIDERS:
+            llm = LlmChat(api_key=api_key, session_id=chat_id, system_message=system_prompt).with_model(provider, model_id)
+            if image_b64_list:
+                file_contents = [ImageContent(image_base64=img["b64"]) for img in image_b64_list]
+                user_message = UserMessage(text=user_prompt or "What do you see in this image?", file_contents=file_contents)
+            else:
+                user_message = UserMessage(text=user_prompt)
+            response_text = await llm.send_message(user_message)
+        else:
+            messages_for_llm = [{"role": "system", "content": system_prompt}]
+            for hm in history_msgs:
+                messages_for_llm.append({"role": hm["role"], "content": hm["content"]})
+            if image_b64_list:
+                content_parts = []
+                if user_prompt:
+                    content_parts.append({"type": "text", "text": user_prompt})
+                for img in image_b64_list:
+                    content_parts.append({"type": "image_url", "image_url": {"url": f"data:{img['mime']};base64,{img['b64']}"}})
+                messages_for_llm.append({"role": "user", "content": content_parts})
+            else:
+                messages_for_llm.append({"role": "user", "content": user_prompt})
+
+            extra_kwargs = {}
+            if provider == "deepseek":
+                os.environ["DEEPSEEK_API_KEY"] = api_key
+            elif provider == "qwen":
+                base_url = (conn or {}).get("providers", {}).get("qwen", {}).get("baseUrl", PROVIDER_BASE_URLS.get("qwen", ""))
+                extra_kwargs["api_base"] = base_url
+                extra_kwargs["api_key"] = api_key
+            elif provider == "grok":
+                os.environ["XAI_API_KEY"] = api_key
+            elif provider == "perplexity":
+                os.environ["PERPLEXITYAI_API_KEY"] = api_key
+            elif provider == "bedrock":
+                bedrock_config = (conn or {}).get("providers", {}).get("bedrock", {})
+                os.environ["AWS_ACCESS_KEY_ID"] = bedrock_config.get("awsAccessKey", "")
+                os.environ["AWS_SECRET_ACCESS_KEY"] = bedrock_config.get("awsSecretKey", "")
+                os.environ["AWS_REGION_NAME"] = bedrock_config.get("awsRegion", "us-east-1")
+            elif provider == "openai_compatible":
+                compat_config = (conn or {}).get("providers", {}).get("openai_compatible", {})
+                extra_kwargs["api_base"] = compat_config.get("baseUrl", "")
+                extra_kwargs["api_key"] = api_key
+
+            response = await litellm.acompletion(model=model_id, messages=messages_for_llm, temperature=temperature, max_tokens=max_tokens, top_p=top_p, **extra_kwargs)
+            response_text = response.choices[0].message.content
+
+    except Exception as e:
+        logger.error(f"LLM error for provider={provider} model={model_id}: {e}")
+        response_text = f"Sorry, I encountered an error while generating a response. Please try again.\n\nError: {str(e)}"
+
+    return response_text, bool(search_context)
+
+
+# ===== Edit & Regenerate =====
+
+@router.post("/chats/{chat_id}/edit")
+async def edit_message(chat_id: str, data: EditMessageRequest, user=Depends(get_current_user)):
+    """Edit a user message and regenerate from that point. Deletes all messages after the edited one."""
+    chat = await db.chats.find_one({"id": chat_id, "user_id": user["id"]}, {"_id": 0})
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+
+    orig_msg = await db.messages.find_one({"id": data.message_id, "chat_id": chat_id, "role": "user"}, {"_id": 0})
+    if not orig_msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    # Delete all messages at or after this message's timestamp
+    await db.messages.delete_many({"chat_id": chat_id, "timestamp": {"$gte": orig_msg["timestamp"]}})
+
+    now_ts = datetime.now(timezone.utc).isoformat()
+    user_msg = {
+        "id": str(uuid.uuid4()),
+        "chat_id": chat_id,
+        "role": "user",
+        "content": data.content,
+        "attachments": orig_msg.get("attachments"),
+        "timestamp": now_ts,
+    }
+    await db.messages.insert_one({**user_msg, "_id": user_msg["id"]})
+
+    model_id = chat.get("model", "gpt-4o")
+    response_text, web_searched = await _generate_llm_response(chat_id, data.content, [], model_id)
+
+    ai_msg = {
+        "id": str(uuid.uuid4()),
+        "chat_id": chat_id,
+        "role": "assistant",
+        "content": response_text,
+        "web_searched": web_searched,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.messages.insert_one({**ai_msg, "_id": ai_msg["id"]})
+
+    # Return full updated message list
+    messages = await db.messages.find({"chat_id": chat_id}, {"_id": 0}).sort("timestamp", 1).to_list(1000)
+    return {"messages": messages}
+
+
+@router.post("/chats/{chat_id}/regenerate")
+async def regenerate_message(chat_id: str, data: RegenerateRequest, user=Depends(get_current_user)):
+    """Regenerate an assistant response. Deletes the target message and all after it, then re-generates."""
+    chat = await db.chats.find_one({"id": chat_id, "user_id": user["id"]}, {"_id": 0})
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+
+    target_msg = await db.messages.find_one({"id": data.message_id, "chat_id": chat_id, "role": "assistant"}, {"_id": 0})
+    if not target_msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    # Delete the target message and everything after
+    await db.messages.delete_many({"chat_id": chat_id, "timestamp": {"$gte": target_msg["timestamp"]}})
+
+    # Find the last user message to re-generate from
+    last_user_msg = await db.messages.find_one({"chat_id": chat_id, "role": "user"}, {"_id": 0}, sort=[("timestamp", -1)])
+    if not last_user_msg:
+        raise HTTPException(status_code=400, detail="No user message to regenerate from")
+
+    model_id = chat.get("model", "gpt-4o")
+    response_text, web_searched = await _generate_llm_response(chat_id, last_user_msg["content"], [], model_id)
+
+    ai_msg = {
+        "id": str(uuid.uuid4()),
+        "chat_id": chat_id,
+        "role": "assistant",
+        "content": response_text,
+        "web_searched": web_searched,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.messages.insert_one({**ai_msg, "_id": ai_msg["id"]})
+
+    messages = await db.messages.find({"chat_id": chat_id}, {"_id": 0}).sort("timestamp", 1).to_list(1000)
+    return {"messages": messages}
 
 
 # ===== Archive, Export, Import =====

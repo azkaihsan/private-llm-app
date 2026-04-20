@@ -58,6 +58,13 @@ class ChatImport(BaseModel):
     chat: dict
     messages: list
 
+class EditMessageRequest(BaseModel):
+    message_id: str
+    content: str
+
+class RegenerateRequest(BaseModel):
+    message_id: str
+
 # ===== Connection Models =====
 
 class TestConnectionRequest(BaseModel):

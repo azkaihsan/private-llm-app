@@ -253,6 +253,30 @@ function AppContent() {
     sendMessage(`${suggestion.title} ${suggestion.subtitle}`);
   }, [sendMessage]);
 
+  const editMessage = useCallback(async (messageId, newContent) => {
+    if (!activeChatId || isTyping) return;
+    setIsTyping(true);
+    try {
+      const res = await axios.post(`${API}/chats/${activeChatId}/edit`, { message_id: messageId, content: newContent });
+      setActiveMessages(res.data.messages || []);
+    } catch (e) {
+      console.error("Failed to edit message:", e);
+    }
+    setIsTyping(false);
+  }, [activeChatId, isTyping]);
+
+  const regenerateMessage = useCallback(async (messageId) => {
+    if (!activeChatId || isTyping) return;
+    setIsTyping(true);
+    try {
+      const res = await axios.post(`${API}/chats/${activeChatId}/regenerate`, { message_id: messageId });
+      setActiveMessages(res.data.messages || []);
+    } catch (e) {
+      console.error("Failed to regenerate:", e);
+    }
+    setIsTyping(false);
+  }, [activeChatId, isTyping]);
+
   const filteredModels = models.filter(m =>
     m.name.toLowerCase().includes(modelSearch.toLowerCase())
   );
@@ -407,7 +431,7 @@ function AppContent() {
         </div>
 
         {activeChatId ? (
-          <ChatArea messages={activeMessages} isTyping={isTyping} />
+          <ChatArea messages={activeMessages} isTyping={isTyping} onEditMessage={editMessage} onRegenerateMessage={regenerateMessage} />
         ) : (
           <WelcomeScreen suggestions={suggestions} onSuggestionClick={handleSuggestionClick} />
         )}

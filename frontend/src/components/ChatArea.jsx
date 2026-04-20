@@ -127,10 +127,38 @@ const AttachmentDisplay = ({ attachments }) => {
   );
 };
 
-const MessageBubble = ({ message, isTyping }) => {
+const MessageBubble = ({ message, isTyping, onEdit, onRegenerate }) => {
   const [hovering, setHovering] = React.useState(false);
+  const [editing, setEditing] = React.useState(false);
+  const [editContent, setEditContent] = React.useState('');
+  const editRef = React.useRef(null);
   const { settings } = useSettings();
   const isUser = message.role === 'user';
+
+  const handleStartEdit = () => {
+    setEditContent(message.content || '');
+    setEditing(true);
+  };
+
+  const handleSubmitEdit = () => {
+    if (editContent.trim() && onEdit) {
+      onEdit(message.id, editContent.trim());
+      setEditing(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditing(false);
+    setEditContent('');
+  };
+
+  React.useEffect(() => {
+    if (editing && editRef.current) {
+      editRef.current.focus();
+      editRef.current.style.height = 'auto';
+      editRef.current.style.height = editRef.current.scrollHeight + 'px';
+    }
+  }, [editing]);
 
   return (
     <div
@@ -147,10 +175,37 @@ const MessageBubble = ({ message, isTyping }) => {
             isUser ? 'rounded-3xl px-5 py-3' : ''
           }`}
           >
-            {isUser && <div style={{ backgroundColor: settings.userBubbleBg, borderRadius: '1.5rem', padding: '12px 20px' }}>
+            {isUser && !editing && <div style={{ backgroundColor: settings.userBubbleBg, borderRadius: '1.5rem', padding: '12px 20px' }}>
               {!isTyping && message.attachments && <AttachmentDisplay attachments={message.attachments} />}
               {isTyping ? null : message.content && <span className="whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>{message.content}</span>}
             </div>}
+            {isUser && editing && (
+              <div className="rounded-2xl p-3 space-y-2" style={{ backgroundColor: settings.userBubbleBg }}>
+                <textarea
+                  ref={editRef}
+                  value={editContent}
+                  onChange={e => { setEditContent(e.target.value); e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmitEdit(); } if (e.key === 'Escape') handleCancelEdit(); }}
+                  className="w-full bg-transparent resize-none outline-none text-sm"
+                  style={{ color: 'var(--text-primary)', minHeight: '40px' }}
+                  data-testid="edit-message-textarea"
+                />
+                <div className="flex items-center justify-end gap-2">
+                  <button onClick={handleCancelEdit} className="px-3 py-1 rounded-lg text-xs hover:bg-white/10 text-neutral-400" data-testid="edit-cancel-btn">
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSubmitEdit}
+                    disabled={!editContent.trim()}
+                    className="px-3 py-1 rounded-lg text-xs font-medium text-white"
+                    style={{ backgroundColor: settings.accentColor }}
+                    data-testid="edit-submit-btn"
+                  >
+                    Send
+                  </button>
+                </div>
+              </div>
+            )}
             {!isUser && (isTyping ? (
               <div className="flex items-center gap-1 py-1">
                 <div className="w-2 h-2 bg-neutral-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -170,7 +225,7 @@ const MessageBubble = ({ message, isTyping }) => {
             ))}
           </div>
           {/* Actions */}
-          {!isTyping && hovering && !isUser && (
+          {!isTyping && hovering && !isUser && !editing && (
             <div className="flex items-center gap-1 mt-1.5">
               <CopyButton text={message.content} />
               <button className="p-1 rounded hover:bg-white/10 text-neutral-400 hover:text-white transition-colors">
@@ -179,15 +234,25 @@ const MessageBubble = ({ message, isTyping }) => {
               <button className="p-1 rounded hover:bg-white/10 text-neutral-400 hover:text-white transition-colors">
                 <ThumbsDown size={14} />
               </button>
-              <button className="p-1 rounded hover:bg-white/10 text-neutral-400 hover:text-white transition-colors">
+              <button
+                onClick={() => onRegenerate && onRegenerate(message.id)}
+                className="p-1 rounded hover:bg-white/10 text-neutral-400 hover:text-white transition-colors"
+                title="Regenerate response"
+                data-testid="regenerate-btn"
+              >
                 <RotateCcw size={14} />
               </button>
             </div>
           )}
-          {!isTyping && hovering && isUser && (
+          {!isTyping && hovering && isUser && !editing && (
             <div className="flex items-center gap-1 mt-1.5 justify-end">
               <CopyButton text={message.content} />
-              <button className="p-1 rounded hover:bg-white/10 text-neutral-400 hover:text-white transition-colors">
+              <button
+                onClick={handleStartEdit}
+                className="p-1 rounded hover:bg-white/10 text-neutral-400 hover:text-white transition-colors"
+                title="Edit message"
+                data-testid="edit-message-btn"
+              >
                 <Pencil size={14} />
               </button>
             </div>
@@ -198,7 +263,7 @@ const MessageBubble = ({ message, isTyping }) => {
   );
 };
 
-const ChatArea = ({ messages, isTyping }) => {
+const ChatArea = ({ messages, isTyping, onEditMessage, onRegenerateMessage }) => {
   const scrollRef = useRef(null);
   const endRef = useRef(null);
 
@@ -210,7 +275,7 @@ const ChatArea = ({ messages, isTyping }) => {
     <div ref={scrollRef} className="flex-1 overflow-y-auto">
       <div className="max-w-3xl mx-auto px-2 sm:px-4 py-2 sm:py-4">
         {messages.map(msg => (
-          <MessageBubble key={msg.id} message={msg} />
+          <MessageBubble key={msg.id} message={msg} onEdit={onEditMessage} onRegenerate={onRegenerateMessage} />
         ))}
         {isTyping && (
           <MessageBubble
