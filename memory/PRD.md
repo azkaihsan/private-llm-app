@@ -94,6 +94,25 @@ A self-hosted, multi-model AI chat interface inspired by Open WebUI. The product
 | Chat isolation between users | Done | user_id scoped queries |
 | Logout with token cleanup | Done | Clears localStorage + axios headers |
 
+#### 3.7 File Upload & Voice Input
+| Requirement | Status | Notes |
+|---|---|---|
+| File upload via + button | Done | All common files (images, docs, code, spreadsheets) |
+| File preview before sending | Done | Thumbnail for images, chip for docs |
+| Remove attached file | Done | X button on hover |
+| Multiple file upload | Done | Select multiple files at once |
+| Max file size 20MB | Done | Enforced on backend |
+| Text extraction from PDFs | Done | PyPDF2 |
+| Text extraction from DOCX | Done | python-docx |
+| Text extraction from XLSX | Done | openpyxl |
+| Text extraction from code/text files | Done | Direct UTF-8 decode |
+| Image vision input | Done | Base64 data URLs sent to multimodal models |
+| Attachments displayed in chat | Done | Inline images, doc chips in message bubbles |
+| Voice input via mic button | Done | Browser Web Speech API (Chrome/Edge) |
+| Speech-to-text in input box | Done | Continuous recognition, interim results |
+| Object storage for files | Done | Emergent object storage integration |
+| File download with auth | Done | Query param auth for img tags |
+
 #### 3.7 Welcome Screen
 | Requirement | Status | Notes |
 |---|---|---|
