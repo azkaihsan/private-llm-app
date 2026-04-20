@@ -13,8 +13,10 @@ cffi==2.0.0
 charset-normalizer==3.4.4
 click==8.3.1
 cryptography==46.0.4
+ddgs==9.14.0
 distro==1.9.0
 dnspython==2.8.0
+duckduckgo_search==8.1.1
 ecdsa==0.19.1
 email-validator==2.3.0
 emergentintegrations==0.1.0
@@ -73,6 +75,7 @@ pathspec==1.0.4
 pillow==12.1.0
 platformdirs==4.5.1
 pluggy==1.6.0
+primp==1.2.3
 propcache==0.4.1
 proto-plus==1.27.1
 protobuf==5.29.6

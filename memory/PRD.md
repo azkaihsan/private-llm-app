@@ -113,7 +113,16 @@ A self-hosted, multi-model AI chat interface inspired by Open WebUI. The product
 | Object storage for files | Done | Emergent object storage integration |
 | File download with auth | Done | Query param auth for img tags |
 
-#### 3.7 Welcome Screen
+#### 3.8 Web Search
+| Requirement | Status | Notes |
+|---|---|---|
+| Automatic web search for every prompt | Done | DuckDuckGo via ddgs library, free, no API key |
+| Search results as LLM context | Done | Top 5 results injected into system prompt |
+| Source citations in responses | Done | LLM instructed to cite with [Source](url) format |
+| "Searched the web" indicator | Done | Globe icon + text on AI messages |
+| Graceful fallback if search fails | Done | Silent fallback, LLM responds without search |
+
+#### 3.9 Welcome Screen
 | Requirement | Status | Notes |
 |---|---|---|
 | Greeting message "How can I help you today?" | Done | Centered with logo |

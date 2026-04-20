@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Copy, Check, RotateCcw, Pencil, ThumbsUp, ThumbsDown, ChevronDown, FileText, File, Image } from 'lucide-react';
+import { Copy, Check, RotateCcw, Pencil, ThumbsUp, ThumbsDown, ChevronDown, FileText, File, Image, Globe } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -159,6 +159,12 @@ const MessageBubble = ({ message, isTyping }) => {
               </div>
             ) : (
               <div className="prose-invert max-w-none" style={{ color: 'var(--text-primary)' }}>
+                {message.web_searched && (
+                  <div className="flex items-center gap-1.5 mb-2 text-xs text-neutral-500" data-testid="web-search-indicator">
+                    <Globe size={12} />
+                    <span>Searched the web</span>
+                  </div>
+                )}
                 <MarkdownContent content={message.content} />
               </div>
             ))}

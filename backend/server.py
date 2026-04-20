@@ -18,6 +18,7 @@ import litellm
 import jwt
 from passlib.context import CryptContext
 import requests as http_requests
+from ddgs import DDGS
 
 
 ROOT_DIR = Path(__file__).parent
@@ -162,6 +163,26 @@ def extract_text_from_file(data: bytes, filename: str, content_type: str) -> str
 def is_image_file(filename: str, content_type: str) -> bool:
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     return ext in IMAGE_EXTENSIONS or (content_type or "").startswith("image/")
+
+
+# ===== Web Search =====
+def web_search(query: str, max_results: int = 5) -> str:
+    """Search the web using DuckDuckGo and return formatted results."""
+    try:
+        with DDGS() as ddgs:
+            results = list(ddgs.text(query, max_results=max_results))
+        if not results:
+            return ""
+        formatted = []
+        for i, r in enumerate(results, 1):
+            title = r.get("title", "")
+            body = r.get("body", "")
+            href = r.get("href", "")
+            formatted.append(f"[{i}] {title}\n{body}\nSource: {href}")
+        return "\n\n".join(formatted)
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"Web search failed: {e}")
+        return ""
 
 
 # Define Models
@@ -682,9 +703,19 @@ async def send_message(chat_id: str, data: MessageCreate, user=Depends(get_curre
     if file_text_parts:
         user_prompt = user_prompt + "\n\n" + "\n\n".join(file_text_parts) if user_prompt else "\n\n".join(file_text_parts)
 
+    # Web search - automatically fetch relevant results
+    search_context = ""
+    if user_prompt.strip():
+        search_context = web_search(user_prompt[:200], max_results=5)
+
     try:
         app_settings = await db.app_settings.find_one({"_id": "global"}, {"_id": 0})
-        system_prompt = (app_settings or {}).get("systemPrompt", "You are a helpful AI assistant. You provide clear, accurate, and well-formatted responses using markdown when appropriate.")
+        base_system_prompt = (app_settings or {}).get("systemPrompt", "You are a helpful AI assistant. You provide clear, accurate, and well-formatted responses using markdown when appropriate.")
+
+        if search_context:
+            system_prompt = base_system_prompt + "\n\nYou have access to recent web search results. Use them to provide up-to-date, accurate information. Cite sources when relevant using [Source](url) format.\n\n--- Web Search Results ---\n" + search_context + "\n--- End of Search Results ---"
+        else:
+            system_prompt = base_system_prompt
 
         # Build chat history
         history_msgs = await db.messages.find(
@@ -764,6 +795,7 @@ async def send_message(chat_id: str, data: MessageCreate, user=Depends(get_curre
         "chat_id": chat_id,
         "role": "assistant",
         "content": response_text,
+        "web_searched": bool(search_context),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
     await db.messages.insert_one({**ai_msg, "_id": ai_msg["id"]})
