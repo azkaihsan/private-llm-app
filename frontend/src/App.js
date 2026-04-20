@@ -182,26 +182,28 @@ function AppContent() {
     } catch (e) { console.error("Failed to import chat:", e); alert("Failed to import chat. Please check the file format."); }
   }, []);
 
-  const sendMessage = useCallback(async (content) => {
+  const sendMessage = useCallback(async (content, fileIds, attachedFiles) => {
     if (isTyping) return;
     const modelId = selectedModel?.id || "gpt-4o";
+    const payload = { content };
+    if (fileIds && fileIds.length > 0) payload.file_ids = fileIds;
 
     if (!activeChatId) {
       // Create new chat first
       try {
         const title = content.length > 50 ? content.slice(0, 50) + "..." : content;
-        const res = await axios.post(`${API}/chats`, { title, model: modelId });
+        const res = await axios.post(`${API}/chats`, { title: title || (attachedFiles?.[0]?.original_filename || "New Chat"), model: modelId });
         const newChat = { ...res.data, createdAt: new Date(res.data.created_at).getTime() };
         setChats(prev => [newChat, ...prev]);
         setActiveChatId(newChat.id);
 
-        // Optimistic: show user message immediately
-        const tempUserMsg = { id: `temp-${Date.now()}`, role: "user", content, timestamp: new Date().toISOString() };
+        // Optimistic: show user message immediately with attachments
+        const tempUserMsg = { id: `temp-${Date.now()}`, role: "user", content, attachments: attachedFiles || null, timestamp: new Date().toISOString() };
         setActiveMessages([tempUserMsg]);
         setIsTyping(true);
 
         // Send message to backend
-        const msgRes = await axios.post(`${API}/chats/${newChat.id}/messages`, { content });
+        const msgRes = await axios.post(`${API}/chats/${newChat.id}/messages`, payload);
         setActiveMessages([msgRes.data.user_message, msgRes.data.assistant_message]);
 
         // Update chat title from backend
@@ -214,12 +216,12 @@ function AppContent() {
       }
     } else {
       // Add message to existing chat
-      const tempUserMsg = { id: `temp-${Date.now()}`, role: "user", content, timestamp: new Date().toISOString() };
+      const tempUserMsg = { id: `temp-${Date.now()}`, role: "user", content, attachments: attachedFiles || null, timestamp: new Date().toISOString() };
       setActiveMessages(prev => [...prev, tempUserMsg]);
       setIsTyping(true);
 
       try {
-        const msgRes = await axios.post(`${API}/chats/${activeChatId}/messages`, { content });
+        const msgRes = await axios.post(`${API}/chats/${activeChatId}/messages`, payload);
         setActiveMessages(prev => {
           const filtered = prev.filter(m => m.id !== tempUserMsg.id);
           return [...filtered, msgRes.data.user_message, msgRes.data.assistant_message];

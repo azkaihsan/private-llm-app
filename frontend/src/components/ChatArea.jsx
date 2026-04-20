@@ -1,11 +1,14 @@
 import React, { useEffect, useRef } from 'react';
-import { Copy, Check, RotateCcw, Pencil, ThumbsUp, ThumbsDown, ChevronDown } from 'lucide-react';
+import { Copy, Check, RotateCcw, Pencil, ThumbsUp, ThumbsDown, ChevronDown, FileText, File, Image } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useSettings } from '@/context/SettingsContext';
 import { LogoPreview } from '@/components/SettingsModal';
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const API = `${BACKEND_URL}/api`;
 
 const CopyButton = ({ text }) => {
   const [copied, setCopied] = React.useState(false);
@@ -88,6 +91,42 @@ const MarkdownContent = ({ content }) => {
   );
 };
 
+const AttachmentDisplay = ({ attachments }) => {
+  if (!attachments || attachments.length === 0) return null;
+  const token = localStorage.getItem('openwebui_token');
+
+  return (
+    <div className="flex flex-wrap gap-2 mb-2">
+      {attachments.map(att => {
+        if (att.is_image) {
+          return (
+            <div key={att.id} className="rounded-xl overflow-hidden max-w-[280px] border border-white/10" data-testid={`msg-attachment-${att.id}`}>
+              <img
+                src={`${API}/files/${att.id}?auth=${token}`}
+                alt={att.filename}
+                className="max-w-full max-h-[200px] object-contain"
+                loading="lazy"
+              />
+            </div>
+          );
+        }
+        const Icon = att.content_type?.includes('pdf') ? FileText : File;
+        return (
+          <div
+            key={att.id}
+            className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs"
+            style={{ backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)' }}
+            data-testid={`msg-attachment-${att.id}`}
+          >
+            <Icon size={14} className="text-neutral-400 shrink-0" />
+            <span className="text-neutral-300 truncate max-w-[160px]">{att.filename}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 const MessageBubble = ({ message, isTyping }) => {
   const [hovering, setHovering] = React.useState(false);
   const { settings } = useSettings();
@@ -109,7 +148,8 @@ const MessageBubble = ({ message, isTyping }) => {
           }`}
           >
             {isUser && <div style={{ backgroundColor: settings.userBubbleBg, borderRadius: '1.5rem', padding: '12px 20px' }}>
-              {isTyping ? null : <span className="whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>{message.content}</span>}
+              {!isTyping && message.attachments && <AttachmentDisplay attachments={message.attachments} />}
+              {isTyping ? null : message.content && <span className="whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>{message.content}</span>}
             </div>}
             {!isUser && (isTyping ? (
               <div className="flex items-center gap-1 py-1">
