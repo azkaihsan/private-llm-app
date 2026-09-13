@@ -8,6 +8,7 @@ import SettingsModal from "@/components/SettingsModal";
 import AuthPage from "@/components/AuthPage";
 import UserManagement from "@/components/UserManagement";
 import ChatSearchBar from "@/components/ChatSearchBar";
+import CommandPalette, { paletteIcons } from "@/components/CommandPalette";
 import { SettingsProvider, useSettings } from "@/context/SettingsContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { suggestions } from "@/data/mockData";
@@ -52,6 +53,32 @@ function AppContent() {
     return () => window.removeEventListener('keydown', onKey);
   }, [activeChatId]);
   const closeChatSearch = () => { setChatSearchOpen(false); setChatSearchTerm(""); };
+
+  // Command palette (Ctrl/Cmd+K)
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [archivedRequest, setArchivedRequest] = useState(0);
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaletteOpen(o => !o);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  const jumpToMessage = useCallback((chatId, term) => {
+    setActiveChatId(chatId);
+    setIsTyping(false);
+    setChatSearchTerm(term);
+    setChatSearchOpen(true);
+  }, []);
+  const paletteActions = useMemo(() => [
+    { id: 'new-chat', label: 'New Chat', icon: paletteIcons.SquarePen, run: () => createNewChat() },
+    { id: 'settings', label: 'Open Settings', icon: paletteIcons.Settings, run: () => setSettingsOpen(true) },
+    { id: 'archived', label: 'Archived Chats', icon: paletteIcons.Archive, run: () => setArchivedRequest(n => n + 1) },
+    ...(isAdmin ? [{ id: 'admin', label: 'Admin Panel', icon: paletteIcons.Shield, run: () => setUserMgmtOpen(true) }] : []),
+  ], [isAdmin]);
   const stepMatch = (dir) => {
     if (!chatSearchMatches.length) return;
     setChatSearchIndex(i => (i + dir + chatSearchMatches.length) % chatSearchMatches.length);
@@ -280,6 +307,8 @@ function AppContent() {
         onToggle={() => setSidebarOpen(false)}
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenUserManagement={() => setUserMgmtOpen(true)}
+        onOpenPalette={() => setPaletteOpen(true)}
+        archivedRequest={archivedRequest}
         onArchiveChat={archiveChat}
         onExportChat={exportChat}
         onImportChat={importChat}
@@ -399,6 +428,14 @@ function AppContent() {
 
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} onModelsChanged={fetchModels} />
       {isAdmin && <UserManagement open={userMgmtOpen} onClose={() => setUserMgmtOpen(false)} />}
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        chats={chats}
+        actions={paletteActions}
+        onSelectChat={selectChat}
+        onJumpToMessage={jumpToMessage}
+      />
     </div>
   );
 }

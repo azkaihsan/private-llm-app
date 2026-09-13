@@ -97,6 +97,7 @@ A self-hosted, multi-model AI chat interface inspired by Open WebUI. The product
 |---|---|---|
 | In-chat message search (Ctrl+F or top-bar icon) | Done | Highlights matches, N/M counter, prev/next, ring on current match, Esc closes |
 | Sidebar search matches message content across chats | Done | Debounced `GET /api/chats/search?q=`, snippet under chat title |
+| Ctrl/Cmd+K command palette | Done | Chats (title), Messages (snippet → jumps to chat with in-chat search pre-filled), quick actions (New Chat, Settings, Archived, Admin Panel*); arrow/Enter/Esc; sidebar "Search Ctrl K" hint |
 
 #### 3.8 Account (added 2026-06)
 | Requirement | Status | Notes |
@@ -251,6 +252,8 @@ A self-hosted, multi-model AI chat interface inspired by Open WebUI. The product
 
 - 2026-06: In-chat search, sidebar content search, Account tab (name/password) — tested (backend 11/11, frontend E2E pass).
 
+- 2026-06: Ctrl+K command palette (frontend E2E pass, 6/6 scenarios). README.md and contracts.md rewritten to cover auth, roles, search, account and all endpoints.
+
 ### 10. Backlog
 - P1: Polish Admin Panel to match Open WebUI look (table layout, last-active column)
-- P2: Streaming responses, file upload, keyboard shortcuts, mobile layout
+- P2: Streaming responses, file upload, mobile layout, admin signup toggle

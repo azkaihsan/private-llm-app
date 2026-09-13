@@ -13,7 +13,7 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const Sidebar = ({
   chats, activeChatId, onSelectChat, onNewChat, onDeleteChat,
-  onRenameChat, isOpen, onToggle, onOpenSettings, onOpenUserManagement,
+  onRenameChat, isOpen, onToggle, onOpenSettings, onOpenUserManagement, onOpenPalette, archivedRequest,
   onArchiveChat, onExportChat, onImportChat,
   archivedChats, onUnarchiveChat, onDeleteArchivedChat, onDeleteAllArchived, onRefreshArchived
 }) => {
@@ -89,6 +89,10 @@ const Sidebar = ({
     reader.readAsText(file);
     e.target.value = '';
   };
+
+  useEffect(() => {
+    if (archivedRequest) { setShowArchived(true); onRefreshArchived && onRefreshArchived(); }
+  }, [archivedRequest]);
 
   const handleOpenArchived = () => {
     setShowArchived(true);
@@ -191,6 +195,20 @@ const Sidebar = ({
           </button>
         </div>
       </div>
+
+      {!searchOpen && (
+        <div className="px-2 pb-2">
+          <button
+            data-testid="sidebar-palette-hint"
+            onClick={onOpenPalette}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-neutral-400 hover:text-neutral-200 text-sm transition-colors"
+          >
+            <Search size={14} />
+            <span className="flex-1 text-left">Search</span>
+            <kbd className="text-[10px] px-1.5 py-0.5 rounded border border-white/15 text-neutral-500">Ctrl K</kbd>
+          </button>
+        </div>
+      )}
 
       {/* Search */}
       {searchOpen && (

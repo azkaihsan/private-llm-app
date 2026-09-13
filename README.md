@@ -1,6 +1,6 @@
 # Open WebUI Clone
 
-A full-stack AI chat application inspired by [Open WebUI](https://github.com/open-webui/open-webui). Built with React, FastAPI, MongoDB, and multi-provider LLM support (OpenAI, Anthropic, Google Gemini).
+A full-stack, multi-user AI chat application inspired by [Open WebUI](https://github.com/open-webui/open-webui). Built with React, FastAPI and MongoDB, with JWT authentication, admin/user roles and support for 9 LLM providers.
 
 ---
 
@@ -9,38 +9,39 @@ A full-stack AI chat application inspired by [Open WebUI](https://github.com/ope
 ### Chat Interface
 - Real-time AI conversations with markdown-rendered responses
 - Syntax-highlighted code blocks with one-click copy
-- Auto-resizing input area with keyboard shortcuts (Enter to send, Shift+Enter for newline)
-- Typing indicator animation while AI generates responses
+- Auto-resizing input (Enter to send, Shift+Enter for newline)
+- Typing indicator while the AI generates a response
 - Message actions: copy, thumbs up/down, regenerate, edit
 
-### Multi-Model Support
-- **OpenAI**: GPT-4o, GPT-4.1 mini, GPT-5.1, GPT-5 mini
-- **Anthropic**: Claude Sonnet 4.5, Claude 4 Sonnet
-- **Google**: Gemini 2.5 Flash, Gemini 2.5 Pro
-- Searchable model selector dropdown
-- Per-chat model selection
+### Multi-Provider LLM Support
+- **Built-in via Emergent key**: OpenAI (GPT-4o, GPT-4.1 mini, GPT-5.1, GPT-5 mini), Anthropic (Claude Sonnet 4.5, Claude 4 Sonnet), Google (Gemini 2.5 Flash / Pro)
+- **Bring your own key**: DeepSeek, Qwen, Grok (xAI), Perplexity, Amazon Bedrock, any OpenAI-compatible endpoint
+- Admin-managed connections (API keys, base URLs, test connection) and per-model enable/disable
+- Searchable model selector, default model, model remembered per chat
+
+### Authentication & Roles
+- Email/password sign up & sign in (bcrypt + JWT, 72h tokens)
+- Two roles: **admin** and **user**. The first account ever created becomes admin; a default admin is also seeded from `.env`
+- Every user sees only their own chats
+- **Admin Panel → User Management**: list, search, create, edit (name / email / role / password) and delete users
+- **Connections** and **Models** settings are admin-only
+- **Account** tab: change display name and password
+
+### Search
+- **Ctrl/Cmd + K command palette** — from anywhere: jump to a chat by title, jump to a message match (opens the chat and highlights the term), or run quick actions (New Chat, Settings, Archived Chats, Admin Panel)
+- **In-chat search** (Ctrl/Cmd + F or the search icon in the chat header) — highlights every match, `n/m` counter, prev/next navigation
+- **Sidebar search** matches chat titles *and* message content, showing a snippet under the chat
 
 ### Chat Management
-- **Export** — Download any chat as a `.json` file with full message history
-- **Import** — Upload a previously exported `.json` file to restore a chat
-- **Archive** — Hide chats from the main list; view/restore/delete from Archived Chats panel
-- **Delete** — Permanently remove a chat and all its messages
-- **Rename** — Inline rename from the sidebar context menu
-- Auto-titling based on the first message sent
-
-### Sidebar
-- Collapsible sidebar with chat history
-- Chats grouped by date: Today, Yesterday, Previous 7 Days, Previous 30 Days, Older
-- Search/filter chats
-- Context menu (⋯) on hover with Rename, Export, Archive, Delete actions
-- Quick access to Import Chat, Workspace, and User menu
+- Export (JSON), Import, Archive / Unarchive, Rename, Delete
+- Archived Chats panel with restore, delete and delete-all
+- Auto-titling from the first message
 
 ### Settings & Customization
-- **General**: App name, logo customization (text or image upload), logo colors
-- **Theme**: 6 built-in presets (Dark, Midnight Blue, Forest, Rosé, OLED Dark, Light) + fully custom color pickers for main background, sidebar, input area, accent, and user bubble
-- **Font Size**: Adjustable from 12px–20px
-- **System Prompt**: Customize AI assistant behavior globally
-- All settings persist to MongoDB across sessions
+- **General**: app name, logo (text or image upload), logo colors
+- **Theme**: 6 presets (Dark, Midnight Blue, Forest, Rosé, OLED Dark, Light) + custom color pickers for main background, sidebar, input, accent and user bubble
+- **Font size** 12–20px, **System Prompt**
+- Settings persist to MongoDB (localStorage used as an instant cache)
 
 ---
 
@@ -48,10 +49,10 @@ A full-stack AI chat application inspired by [Open WebUI](https://github.com/ope
 
 | Layer | Technology |
 |------------|---------------------------------------------|
-| Frontend | React 19, Tailwind CSS, shadcn/ui, Lucide Icons |
-| Backend | FastAPI, Pydantic, Motor (async MongoDB) |
+| Frontend | React 19, Tailwind CSS, shadcn/ui, Lucide Icons, Axios |
+| Backend | FastAPI, Pydantic v2, Motor (async MongoDB), PyJWT, passlib/bcrypt |
 | Database | MongoDB |
-| LLM | emergentintegrations (OpenAI, Anthropic, Gemini) |
+| LLM | emergentintegrations (OpenAI, Anthropic, Gemini) + litellm (DeepSeek, Qwen, Grok, Perplexity, Bedrock, OpenAI-compatible) |
 | Markdown | react-markdown, remark-gfm, react-syntax-highlighter |
 
 ---
@@ -61,73 +62,99 @@ A full-stack AI chat application inspired by [Open WebUI](https://github.com/ope
 ```
 /app
 ├── backend/
-│   ├── server.py              # FastAPI app with all API routes
-│   ├── requirements.txt       # Python dependencies
-│   └── .env                   # MONGO_URL, DB_NAME, EMERGENT_LLM_KEY
+│   ├── server.py                  # FastAPI app: auth, users, chats, search, connections, settings
+│   ├── requirements.txt
+│   └── .env                       # MONGO_URL, DB_NAME, EMERGENT_LLM_KEY, JWT_SECRET, ADMIN_EMAIL, ADMIN_PASSWORD
 ├── frontend/
 │   ├── src/
-│   │   ├── App.js             # Main app with state management
-│   │   ├── App.css            # Global styles, scrollbar, animations
-│   │   ├── index.css          # Tailwind + CSS variables for theming
+│   │   ├── App.js                 # Auth gate, chat state, in-chat search, command palette
 │   │   ├── components/
-│   │   │   ├── Sidebar.jsx    # Chat list, search, context menu, archived view
-│   │   │   ├── ChatArea.jsx   # Message list with markdown rendering
-│   │   │   ├── ChatInput.jsx  # Auto-resizing input with send/mic buttons
-│   │   │   ├── WelcomeScreen.jsx  # Landing view with suggestions
-│   │   │   ├── SettingsModal.jsx  # Settings with General/Theme/System tabs
-│   │   │   └── ui/            # shadcn/ui component library
+│   │   │   ├── AuthPage.jsx       # Sign in / Sign up
+│   │   │   ├── Sidebar.jsx        # Chat list, title+content search, user menu, archived view
+│   │   │   ├── ChatArea.jsx       # Messages with markdown + match highlighting
+│   │   │   ├── ChatSearchBar.jsx  # In-chat search bar (Ctrl+F)
+│   │   │   ├── CommandPalette.jsx # Ctrl+K palette (chats, messages, actions)
+│   │   │   ├── ChatInput.jsx
+│   │   │   ├── WelcomeScreen.jsx
+│   │   │   ├── SettingsModal.jsx  # Connections*, Models*, General, Theme, System Prompt, Account (*admin only)
+│   │   │   ├── AccountTab.jsx     # Display name + password change
+│   │   │   ├── UserManagement.jsx # Admin user CRUD modal
+│   │   │   └── ui/                # shadcn/ui primitives
 │   │   ├── context/
-│   │   │   └── SettingsContext.jsx  # Global settings state + CSS variable injection
-│   │   └── data/
-│   │       └── mockData.js    # Suggestion cards data
-│   ├── package.json
-│   └── tailwind.config.js
-├── contracts.md               # API contracts & integration plan
+│   │   │   ├── AuthContext.jsx    # JWT storage, axios auth header, 401 auto-logout
+│   │   │   └── SettingsContext.jsx
+│   │   └── data/mockData.js       # Suggestion cards
+│   └── .env                       # REACT_APP_BACKEND_URL
+├── memory/
+│   ├── PRD.md                     # Product requirements & changelog
+│   └── test_credentials.md        # Seeded admin credentials for testing
+├── contracts.md                   # API contracts
 └── README.md
 ```
 
 ---
 
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl/⌘ + K` | Open command palette (search chats, messages, actions) |
+| `Ctrl/⌘ + F` | Search inside the open chat |
+| `↑ / ↓`, `Enter`, `Esc` | Navigate / open / close in palette and search bar |
+| `Enter` / `Shift+Enter` | Send message / new line |
+
+---
+
 ## API Reference
 
-### Models
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/models` | List available AI models |
+All routes are prefixed with `/api`. Authenticated routes expect `Authorization: Bearer <token>`.
 
-### Chats
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/chats` | List all active (non-archived) chats |
-| POST | `/api/chats` | Create a new chat |
-| GET | `/api/chats/:id` | Get chat with all messages |
-| PUT | `/api/chats/:id` | Rename a chat |
-| DELETE | `/api/chats/:id` | Delete a chat permanently |
+### Auth
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/auth/signup` | — | Register `{name, email, password}` → `{token, user}`. First user becomes admin |
+| POST | `/auth/login` | — | Login `{email, password}` → `{token, user}` |
+| GET | `/auth/me` | user | Current user |
+| PUT | `/auth/profile` | user | Update display name `{name}` |
+| PUT | `/auth/password` | user | Change password `{current_password, new_password}` |
 
-### Messages
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/chats/:id/messages` | Send a message and receive AI response |
+### Admin — Users
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/admin/users` | admin | List users |
+| POST | `/admin/users` | admin | Create user `{name, email, password, role}` |
+| PUT | `/admin/users/:id` | admin | Update name / email / role / password |
+| DELETE | `/admin/users/:id` | admin | Delete user and their chats (cannot delete self) |
 
-### Archive
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/chats/archived` | List archived chats |
-| PUT | `/api/chats/:id/archive` | Archive a chat |
-| PUT | `/api/chats/:id/unarchive` | Restore an archived chat |
-| DELETE | `/api/chats/archived/all` | Delete all archived chats |
+### Connections & Models
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/models` | — | Available models (respects enabled flags) |
+| GET | `/connections` | admin | Provider settings (keys masked) |
+| PUT | `/connections` | admin | Save provider settings / default model / enabled models |
+| POST | `/connections/test` | admin | Test a provider connection |
 
-### Export / Import
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/chats/:id/export` | Export chat as JSON |
-| POST | `/api/chats/import` | Import a chat from JSON |
+### Chats & Messages
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/chats` | user | List the caller's active chats |
+| POST | `/chats` | user | Create chat `{title, model}` |
+| GET | `/chats/search?q=` | user | Search message content across the caller's chats → `[{chat_id, snippet, role, count}]` |
+| GET | `/chats/:id` | user | Chat with messages |
+| PUT | `/chats/:id` | user | Rename |
+| DELETE | `/chats/:id` | user | Delete chat + messages |
+| POST | `/chats/:id/messages` | user | Send message, receive AI reply |
+| GET | `/chats/archived` | user | Archived chats |
+| PUT | `/chats/:id/archive` · `/unarchive` | user | Archive / restore |
+| DELETE | `/chats/archived/all` | user | Delete all archived |
+| GET | `/chats/:id/export` | user | Export as JSON |
+| POST | `/chats/import` | user | Import from JSON |
 
 ### Settings
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/settings` | Get app settings |
-| PUT | `/api/settings` | Save/update app settings |
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/settings` | — | Global appearance settings |
+| PUT | `/settings` | — | Save appearance settings |
 
 ---
 
@@ -138,13 +165,15 @@ A full-stack AI chat application inspired by [Open WebUI](https://github.com/ope
 |----------|-------------|
 | `MONGO_URL` | MongoDB connection string |
 | `DB_NAME` | Database name |
-| `EMERGENT_LLM_KEY` | Universal LLM API key for OpenAI/Anthropic/Gemini |
+| `EMERGENT_LLM_KEY` | Universal key for OpenAI / Anthropic / Gemini |
 | `CORS_ORIGINS` | Allowed CORS origins |
+| `JWT_SECRET` | Secret used to sign JWTs |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Default admin seeded (idempotently) on startup |
 
 ### Frontend (`/app/frontend/.env`)
 | Variable | Description |
 |----------|-------------|
-| `REACT_APP_BACKEND_URL` | Backend API base URL |
+| `REACT_APP_BACKEND_URL` | Backend base URL |
 
 ---
 
@@ -152,9 +181,11 @@ A full-stack AI chat application inspired by [Open WebUI](https://github.com/ope
 
 | Collection | Purpose |
 |------------|----------|
-| `chats` | Chat metadata (id, title, model, created_at, archived) |
-| `messages` | Individual messages (id, chat_id, role, content, timestamp) |
-| `app_settings` | Global app settings (theme, logo, system prompt) |
+| `users` | `{id, name, email, password_hash, role, created_at}` — unique index on `email` |
+| `chats` | `{id, title, model, user_id, archived, created_at}` |
+| `messages` | `{id, chat_id, role, content, timestamp}` |
+| `connections` | Provider API keys / base URLs, default model, enabled models |
+| `app_settings` | Theme, logo, font size, system prompt |
 
 ---
 
@@ -171,6 +202,8 @@ cd frontend
 yarn install
 yarn start
 ```
+
+Sign in with the seeded admin (`ADMIN_EMAIL` / `ADMIN_PASSWORD` from `backend/.env`) or create an account — the first account created becomes admin.
 
 ---
 
