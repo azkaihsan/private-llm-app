@@ -82,7 +82,17 @@ A self-hosted, multi-model AI chat interface inspired by Open WebUI. The product
 | Reset to defaults | Done | Button in modal footer |
 | Light/dark text auto-detection | Done | Based on background luminance |
 
-#### 3.6 Welcome Screen
+#### 3.6 Authentication & User Management (added 2026-06)
+| Requirement | Status | Notes |
+|---|---|---|
+| Email/password signup & login (JWT, bcrypt) | Done | Token in localStorage, Bearer header on all axios calls, auto-logout on 401 |
+| Two roles: admin / user | Done | First-ever signup becomes admin; default admin seeded from backend/.env (ADMIN_EMAIL/ADMIN_PASSWORD) |
+| Per-user chat isolation | Done | All chat/message routes scoped by user_id |
+| Admin Panel → User Management (list/search/create/edit role+password/delete) | Done | `UserManagement.jsx`, `/api/admin/users` |
+| Connections & Models settings admin-only | Done | Tabs hidden for users; backend 403 |
+| Sidebar user menu shows real name, admin badge, Sign Out | Done | |
+
+#### 3.7 Welcome Screen
 | Requirement | Status | Notes |
 |---|---|---|
 | Greeting message "How can I help you today?" | Done | Centered with logo |
@@ -177,6 +187,12 @@ A self-hosted, multi-model AI chat interface inspired by Open WebUI. The product
 | 15 | PUT | /api/settings | Save global settings |
 | 16 | GET | /api/ | Health check |
 | 17 | GET/POST | /api/status | Status check (legacy) |
+| 18 | POST | /api/auth/signup | Register (first user = admin) |
+| 19 | POST | /api/auth/login | Login → {token, user} |
+| 20 | GET | /api/auth/me | Current user |
+| 21 | GET/POST | /api/admin/users | List / create users (admin) |
+| 22 | PUT/DELETE | /api/admin/users/:id | Update / delete user (admin) |
+| 23 | GET/PUT | /api/connections, POST /api/connections/test | LLM provider connections (admin) |
 
 ---
 
@@ -196,8 +212,6 @@ A self-hosted, multi-model AI chat interface inspired by Open WebUI. The product
 ### 7. Future Enhancements (Not Yet Implemented)
 
 - Streaming responses (real-time token display)
-- User authentication (JWT or OAuth)
-- Multi-user support with separate chat histories
 - File/image upload in messages
 - Conversation branching (edit + regenerate from any point)
 - Prompt templates library
@@ -213,6 +227,14 @@ A self-hosted, multi-model AI chat interface inspired by Open WebUI. The product
 ### 8. Known Limitations
 
 - LLM responses are non-streaming (full response returned after generation completes)
-- No authentication — single-user mode
 - Logo image stored as base64 in MongoDB (max 512KB enforced on frontend)
 - Emergent LLM key budget may need topping up (Profile → Universal Key → Add Balance)
+
+---
+
+### 9. Changelog
+- 2026-06: Role-based auth & user management completed and tested (backend 19/19, frontend E2E pass). Credentials in memory/test_credentials.md.
+
+### 10. Backlog
+- P1: Polish Admin Panel to match Open WebUI look (table layout, last-active column)
+- P2: Streaming responses, file upload, keyboard shortcuts, mobile layout

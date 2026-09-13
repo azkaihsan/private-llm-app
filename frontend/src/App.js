@@ -5,9 +5,12 @@ import WelcomeScreen from "@/components/WelcomeScreen";
 import ChatArea from "@/components/ChatArea";
 import ChatInput from "@/components/ChatInput";
 import SettingsModal from "@/components/SettingsModal";
+import AuthPage from "@/components/AuthPage";
+import UserManagement from "@/components/UserManagement";
 import { SettingsProvider, useSettings } from "@/context/SettingsContext";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { suggestions } from "@/data/mockData";
-import { PanelLeft, SquarePen, ChevronDown, Check, Search } from "lucide-react";
+import { PanelLeft, SquarePen, ChevronDown, Check, Search, Loader2 } from "lucide-react";
 import axios from "axios";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -15,6 +18,7 @@ const API = `${BACKEND_URL}/api`;
 
 function AppContent() {
   const { settings } = useSettings();
+  const { user, isAdmin } = useAuth();
   const [chats, setChats] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -25,6 +29,7 @@ function AppContent() {
   const [modelSearch, setModelSearch] = useState("");
   const [activeMessages, setActiveMessages] = useState([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [userMgmtOpen, setUserMgmtOpen] = useState(false);
 
   // Fetch models on mount
   const fetchModels = useCallback(async () => {
@@ -32,21 +37,27 @@ function AppContent() {
       const res = await axios.get(`${API}/models`);
       const enabledModels = res.data.filter(m => m.enabled !== false);
       setModels(enabledModels);
-      // Try to load default model from connections
-      const connRes = await axios.get(`${API}/connections`);
-      const defaultModelId = connRes.data?.defaultModel;
+      let defaultModelId = null;
+      if (isAdmin) {
+        try {
+          const connRes = await axios.get(`${API}/connections`);
+          defaultModelId = connRes.data?.defaultModel;
+        } catch (e) { /* non-admin or no connections */ }
+      }
       const defaultModel = enabledModels.find(m => m.id === defaultModelId);
       if (defaultModel) setSelectedModel(defaultModel);
-      else if (enabledModels.length > 0 && !selectedModel) setSelectedModel(enabledModels[0]);
+      else if (enabledModels.length > 0) setSelectedModel(prev => prev || enabledModels[0]);
     } catch (e) {
       console.error("Failed to fetch models:", e);
     }
-  }, []);
+  }, [isAdmin]);
 
   useEffect(() => { fetchModels(); }, [fetchModels]);
 
-  // Fetch chats on mount
+  // Fetch chats on mount / user change
   useEffect(() => {
+    setActiveChatId(null);
+    setActiveMessages([]);
     const fetchChats = async () => {
       try {
         const res = await axios.get(`${API}/chats`);
@@ -60,7 +71,7 @@ function AppContent() {
       }
     };
     fetchChats();
-  }, []);
+  }, [user?.id]);
 
   // Fetch messages when active chat changes
   useEffect(() => {
@@ -242,6 +253,7 @@ function AppContent() {
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(false)}
         onOpenSettings={() => setSettingsOpen(true)}
+        onOpenUserManagement={() => setUserMgmtOpen(true)}
         onArchiveChat={archiveChat}
         onExportChat={exportChat}
         onImportChat={importChat}
@@ -330,14 +342,30 @@ function AppContent() {
       </div>
 
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} onModelsChanged={fetchModels} />
+      {isAdmin && <UserManagement open={userMgmtOpen} onClose={() => setUserMgmtOpen(false)} />}
     </div>
   );
+}
+
+function AuthGate() {
+  const { user, loading } = useAuth();
+  const { settings } = useSettings();
+  if (loading) {
+    return (
+      <div data-testid="auth-loading" className="h-screen flex items-center justify-center" style={{ backgroundColor: settings.mainBg }}>
+        <Loader2 size={28} className="animate-spin" style={{ color: 'var(--text-muted)' }} />
+      </div>
+    );
+  }
+  return user ? <AppContent /> : <AuthPage />;
 }
 
 function App() {
   return (
     <SettingsProvider>
-      <AppContent />
+      <AuthProvider>
+        <AuthGate />
+      </AuthProvider>
     </SettingsProvider>
   );
 }

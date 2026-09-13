@@ -4,6 +4,7 @@ import {
   Link2, Cpu, Eye, EyeOff, Zap, CheckCircle2, XCircle, Loader2, ToggleLeft, ToggleRight
 } from 'lucide-react';
 import { useSettings } from '@/context/SettingsContext';
+import { useAuth } from '@/context/AuthContext';
 import axios from 'axios';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -31,7 +32,9 @@ const PROVIDER_INFO = {
 
 const SettingsModal = ({ open, onClose, onModelsChanged }) => {
   const { settings, updateSettings, resetSettings, themePresets } = useSettings();
-  const [activeTab, setActiveTab] = useState('connections');
+  const { isAdmin } = useAuth();
+  const visibleTabs = tabs.filter(t => isAdmin || !['connections', 'models'].includes(t.id));
+  const [activeTab, setActiveTab] = useState(isAdmin ? 'connections' : 'general');
   const [localSettings, setLocalSettings] = useState(settings);
   const fileInputRef = useRef(null);
 
@@ -48,9 +51,9 @@ const SettingsModal = ({ open, onClose, onModelsChanged }) => {
   useEffect(() => {
     if (!open) return;
     setLocalSettings(settings);
-    loadConnections();
-    loadModels();
-  }, [open, settings]);
+    if (isAdmin) { loadConnections(); loadModels(); }
+    else setActiveTab(t => ['connections', 'models'].includes(t) ? 'general' : t);
+  }, [open, settings, isAdmin]);
 
   const loadConnections = async () => {
     try {
@@ -208,11 +211,12 @@ const SettingsModal = ({ open, onClose, onModelsChanged }) => {
           <div className="flex flex-1 min-h-0">
             {/* Tab Navigation */}
             <div className="w-44 shrink-0 p-3 space-y-0.5" style={{ borderRight: `1px solid ${isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.08)'}` }}>
-              {tabs.map(tab => {
+              {visibleTabs.map(tab => {
                 const Icon = tab.icon;
                 return (
                   <button
                     key={tab.id}
+                    data-testid={`settings-tab-${tab.id}`}
                     onClick={() => setActiveTab(tab.id)}
                     className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
                     style={{
