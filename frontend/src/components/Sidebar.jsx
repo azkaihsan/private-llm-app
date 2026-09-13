@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import axios from 'axios';
 import {
   Plus, Search, MessageSquare, Pencil, Trash2,
   PanelLeft, Folder, Settings, LogOut, CircleUser,
@@ -7,6 +8,8 @@ import {
 } from 'lucide-react';
 import { useSettings } from '@/context/SettingsContext';
 import { useAuth } from '@/context/AuthContext';
+
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const Sidebar = ({
   chats, activeChatId, onSelectChat, onNewChat, onDeleteChat,
@@ -25,6 +28,21 @@ const Sidebar = ({
   const [showArchived, setShowArchived] = useState(false);
   const { settings } = useSettings();
   const fileInputRef = useRef(null);
+  const [contentMatches, setContentMatches] = useState({});
+
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < 2) { setContentMatches({}); return; }
+    const t = setTimeout(async () => {
+      try {
+        const res = await axios.get(`${API}/chats/search`, { params: { q } });
+        const map = {};
+        res.data.forEach(r => { map[r.chat_id] = r; });
+        setContentMatches(map);
+      } catch (e) { console.error('Search failed:', e); }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
 
   const groupChatsByDate = (chatList) => {
     const groups = { 'Today': [], 'Yesterday': [], 'Previous 7 Days': [], 'Previous 30 Days': [], 'Older': [] };
@@ -40,7 +58,7 @@ const Sidebar = ({
   };
 
   const filteredChats = chats.filter(c =>
-    c.title.toLowerCase().includes(searchQuery.toLowerCase())
+    c.title.toLowerCase().includes(searchQuery.toLowerCase()) || contentMatches[c.id]
   );
   const groupedChats = groupChatsByDate(filteredChats);
 
@@ -158,6 +176,7 @@ const Sidebar = ({
         </button>
         <div className="flex items-center gap-0.5">
           <button
+            data-testid="sidebar-search-toggle"
             onClick={() => setSearchOpen(!searchOpen)}
             className="p-2 rounded-lg hover:bg-white/5 text-neutral-400 hover:text-white transition-colors"
           >
@@ -183,6 +202,7 @@ const Sidebar = ({
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="Search chats..."
+              data-testid="sidebar-search-input"
               className="w-full bg-[#2f2f2f] text-white text-sm rounded-lg pl-9 pr-8 py-2 outline-none placeholder:text-neutral-500 focus:ring-1 focus:ring-neutral-600"
               autoFocus
             />
@@ -233,9 +253,14 @@ const Sidebar = ({
                     />
                   ) : (
                     <div className="flex items-center">
-                      <span className="flex-1 min-w-0 text-sm text-neutral-200 truncate py-2 px-3">
-                        {chat.title}
-                      </span>
+                      <div className="flex-1 min-w-0 py-2 px-3">
+                        <span data-testid={`chat-item-${chat.id}`} className="block text-sm text-neutral-200 truncate">{chat.title}</span>
+                        {searchQuery && contentMatches[chat.id] && (
+                          <span data-testid={`chat-snippet-${chat.id}`} className="block text-[11px] text-neutral-500 truncate mt-0.5">
+                            {contentMatches[chat.id].snippet}
+                          </span>
+                        )}
+                      </div>
                       {showActions && (
                         <button
                           onClick={e => { e.stopPropagation(); setContextMenuChat(isMenuOpen ? null : chat.id); }}

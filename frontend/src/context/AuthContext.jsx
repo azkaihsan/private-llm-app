@@ -83,10 +83,20 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   }, []);
 
+  const updateProfile = useCallback(async (name) => {
+    const res = await axios.put(`${API}/auth/profile`, { name });
+    setUser(res.data);
+    return res.data;
+  }, []);
+
+  const changePassword = useCallback(async (current_password, new_password) => {
+    await axios.put(`${API}/auth/password`, { current_password, new_password });
+  }, []);
+
   const isAdmin = user?.role === 'admin';
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, signup, logout, isAdmin }}>
+    <AuthContext.Provider value={{ user, token, loading, login, signup, logout, isAdmin, updateProfile, changePassword }}>
       {children}
     </AuthContext.Provider>
   );

@@ -92,7 +92,18 @@ A self-hosted, multi-model AI chat interface inspired by Open WebUI. The product
 | Connections & Models settings admin-only | Done | Tabs hidden for users; backend 403 |
 | Sidebar user menu shows real name, admin badge, Sign Out | Done | |
 
-#### 3.7 Welcome Screen
+#### 3.7 Search (added 2026-06)
+| Requirement | Status | Notes |
+|---|---|---|
+| In-chat message search (Ctrl+F or top-bar icon) | Done | Highlights matches, N/M counter, prev/next, ring on current match, Esc closes |
+| Sidebar search matches message content across chats | Done | Debounced `GET /api/chats/search?q=`, snippet under chat title |
+
+#### 3.8 Account (added 2026-06)
+| Requirement | Status | Notes |
+|---|---|---|
+| Settings → Account tab (all users) | Done | Change display name (sidebar updates instantly), change password (current pw required, min 6) |
+
+#### 3.9 Welcome Screen
 | Requirement | Status | Notes |
 |---|---|---|
 | Greeting message "How can I help you today?" | Done | Centered with logo |
@@ -193,6 +204,9 @@ A self-hosted, multi-model AI chat interface inspired by Open WebUI. The product
 | 21 | GET/POST | /api/admin/users | List / create users (admin) |
 | 22 | PUT/DELETE | /api/admin/users/:id | Update / delete user (admin) |
 | 23 | GET/PUT | /api/connections, POST /api/connections/test | LLM provider connections (admin) |
+| 24 | PUT | /api/auth/profile | Update display name |
+| 25 | PUT | /api/auth/password | Change password |
+| 26 | GET | /api/chats/search?q= | Search message content across user's chats |
 
 ---
 
@@ -234,6 +248,8 @@ A self-hosted, multi-model AI chat interface inspired by Open WebUI. The product
 
 ### 9. Changelog
 - 2026-06: Role-based auth & user management completed and tested (backend 19/19, frontend E2E pass). Credentials in memory/test_credentials.md.
+
+- 2026-06: In-chat search, sidebar content search, Account tab (name/password) — tested (backend 11/11, frontend E2E pass).
 
 ### 10. Backlog
 - P1: Polish Admin Panel to match Open WebUI look (table layout, last-active column)

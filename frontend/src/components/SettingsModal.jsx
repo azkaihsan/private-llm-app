@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  X, Upload, Type, Image, RotateCcw, Check, Palette, Settings, MessageSquare,
+  X, Upload, Type, Image, RotateCcw, Check, Palette, Settings, MessageSquare, CircleUser,
   Link2, Cpu, Eye, EyeOff, Zap, CheckCircle2, XCircle, Loader2, ToggleLeft, ToggleRight
 } from 'lucide-react';
 import { useSettings } from '@/context/SettingsContext';
 import { useAuth } from '@/context/AuthContext';
+import { AccountTab } from '@/components/AccountTab';
 import axios from 'axios';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -16,6 +17,7 @@ const tabs = [
   { id: 'general', label: 'General', icon: Settings },
   { id: 'theme', label: 'Theme', icon: Palette },
   { id: 'system', label: 'System Prompt', icon: MessageSquare },
+  { id: 'account', label: 'Account', icon: CircleUser },
 ];
 
 const PROVIDER_INFO = {
@@ -654,6 +656,10 @@ const SettingsModal = ({ open, onClose, onModelsChanged }) => {
                     <div className="flex justify-between text-xs mt-1" style={{ color: mutedColor }}><span>12px</span><span>20px</span></div>
                   </div>
                 </>
+              )}
+
+              {activeTab === 'account' && (
+                <AccountTab inputStyle={inputStyle} labelColor={labelColor} mutedColor={mutedColor} accentColor={localSettings.accentColor} accentText={isLightBg(localSettings.accentColor) ? '#000' : '#fff'} />
               )}
 
               {/* ===== SYSTEM PROMPT TAB ===== */}

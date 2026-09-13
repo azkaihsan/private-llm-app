@@ -177,6 +177,31 @@ async def login(data: LoginRequest):
 async def get_me(user=Depends(get_current_user)):
     return user
 
+class ProfileUpdate(BaseModel):
+    name: str
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+@api_router.put("/auth/profile")
+async def update_profile(data: ProfileUpdate, user=Depends(get_current_user)):
+    name = data.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Name cannot be empty")
+    await db.users.update_one({"id": user["id"]}, {"$set": {"name": name}})
+    return await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0})
+
+@api_router.put("/auth/password")
+async def change_password(data: PasswordChange, user=Depends(get_current_user)):
+    full = await db.users.find_one({"id": user["id"]})
+    if not verify_password(data.current_password, full["password_hash"]):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    if len(data.new_password) < 6:
+        raise HTTPException(status_code=400, detail="New password must be at least 6 characters")
+    await db.users.update_one({"id": user["id"]}, {"$set": {"password_hash": hash_password(data.new_password)}})
+    return {"success": True}
+
 # ===== Admin: User Management =====
 
 class AdminCreateUser(BaseModel):
@@ -440,6 +465,27 @@ async def create_chat(data: ChatCreate, user=Depends(get_current_user)):
 async def get_archived_chats(user=Depends(get_current_user)):
     chats = await db.chats.find({"user_id": user["id"], "archived": True}, {"_id": 0}).sort("created_at", -1).to_list(100)
     return chats
+
+@api_router.get("/chats/search")
+async def search_chats(q: str, user=Depends(get_current_user)):
+    term = q.strip()
+    if len(term) < 2:
+        return []
+    import re
+    rx = {"$regex": re.escape(term), "$options": "i"}
+    chat_ids = [c["id"] for c in await db.chats.find({"user_id": user["id"], "archived": {"$ne": True}}, {"id": 1}).to_list(500)]
+    msgs = await db.messages.find({"chat_id": {"$in": chat_ids}, "content": rx}, {"_id": 0, "chat_id": 1, "content": 1, "role": 1}).to_list(500)
+    results = {}
+    for m in msgs:
+        if m["chat_id"] in results:
+            results[m["chat_id"]]["count"] += 1
+            continue
+        content = m["content"]
+        idx = content.lower().find(term.lower())
+        start = max(0, idx - 40)
+        snippet = ("…" if start > 0 else "") + content[start:idx + len(term) + 60].replace("\n", " ") + ("…" if idx + len(term) + 60 < len(content) else "")
+        results[m["chat_id"]] = {"chat_id": m["chat_id"], "snippet": snippet, "role": m["role"], "count": 1}
+    return list(results.values())
 
 @api_router.get("/chats/{chat_id}")
 async def get_chat(chat_id: str, user=Depends(get_current_user)):

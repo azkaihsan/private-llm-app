@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useMemo } from "react";
 import "@/App.css";
 import Sidebar from "@/components/Sidebar";
 import WelcomeScreen from "@/components/WelcomeScreen";
@@ -7,6 +7,7 @@ import ChatInput from "@/components/ChatInput";
 import SettingsModal from "@/components/SettingsModal";
 import AuthPage from "@/components/AuthPage";
 import UserManagement from "@/components/UserManagement";
+import ChatSearchBar from "@/components/ChatSearchBar";
 import { SettingsProvider, useSettings } from "@/context/SettingsContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { suggestions } from "@/data/mockData";
@@ -30,6 +31,31 @@ function AppContent() {
   const [activeMessages, setActiveMessages] = useState([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [userMgmtOpen, setUserMgmtOpen] = useState(false);
+  const [chatSearchOpen, setChatSearchOpen] = useState(false);
+  const [chatSearchTerm, setChatSearchTerm] = useState("");
+  const [chatSearchIndex, setChatSearchIndex] = useState(0);
+
+  const chatSearchMatches = useMemo(() => {
+    const t = chatSearchTerm.trim().toLowerCase();
+    if (!t) return [];
+    return activeMessages.filter(m => m.content?.toLowerCase().includes(t)).map(m => m.id);
+  }, [activeMessages, chatSearchTerm]);
+  useEffect(() => { setChatSearchIndex(0); }, [chatSearchTerm, activeChatId]);
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f' && activeChatId) {
+        e.preventDefault();
+        setChatSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [activeChatId]);
+  const closeChatSearch = () => { setChatSearchOpen(false); setChatSearchTerm(""); };
+  const stepMatch = (dir) => {
+    if (!chatSearchMatches.length) return;
+    setChatSearchIndex(i => (i + dir + chatSearchMatches.length) % chatSearchMatches.length);
+  };
 
   // Fetch models on mount
   const fetchModels = useCallback(async () => {
@@ -326,10 +352,40 @@ function AppContent() {
               )}
             </div>
           )}
+
+          {activeChatId && (
+            <div className="ml-auto flex items-center">
+              {chatSearchOpen ? (
+                <ChatSearchBar
+                  term={chatSearchTerm}
+                  onTermChange={setChatSearchTerm}
+                  matchCount={chatSearchMatches.length}
+                  currentIndex={chatSearchIndex}
+                  onPrev={() => stepMatch(-1)}
+                  onNext={() => stepMatch(1)}
+                  onClose={closeChatSearch}
+                />
+              ) : (
+                <button
+                  data-testid="chat-search-toggle"
+                  onClick={() => setChatSearchOpen(true)}
+                  title="Search in chat (Ctrl+F)"
+                  className="p-2 rounded-lg hover:bg-white/5 text-neutral-400 hover:text-white transition-colors"
+                >
+                  <Search size={18} />
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {activeChatId ? (
-          <ChatArea messages={activeMessages} isTyping={isTyping} />
+          <ChatArea
+            messages={activeMessages}
+            isTyping={isTyping}
+            searchTerm={chatSearchOpen ? chatSearchTerm.trim() : ""}
+            currentMatchId={chatSearchOpen ? chatSearchMatches[chatSearchIndex] || null : null}
+          />
         ) : (
           <WelcomeScreen suggestions={suggestions} onSuggestionClick={handleSuggestionClick} />
         )}

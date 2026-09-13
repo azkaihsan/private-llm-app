@@ -1,0 +1,34 @@
+{
+  "summary": "Iteration 2: Tested new features - profile update, password change, in-chat search, sidebar message content search, and Account settings tab. Backend: 11/11 pytest tests pass (auth/profile empty+valid+no-token, auth/password wrong-current+short-new+valid+relogin+revert, chats/search short-query+no-auth+finds+archived-excluded+case-insensitive+cross-user-isolation). Frontend: admin login, chat import via API, sidebar-search-toggle -> sidebar-search-input with UNIQUE word shows chat-snippet-<id> even though title has no match; typing garbage shows 'No chats found'. Ctrl+F opens chat-search-bar with 2 matches, count 1/2, 2 <mark> highlights, next/prev cycle counter correctly. Account tab visible for regular user, empty name triggers account-name-error, valid rename updates sidebar-user-name instantly (Renamed Live). Wrong current password -> account-password-error 'Current password is incorrect'; mismatched confirm -> 'Passwords do not match'; valid change -> account-password-success; relogin with new password succeeds.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ChatSearchBar", "issue": "Escape key only closes the search bar when the search input still has focus. After clicking chat-search-prev/next the input can lose focus and Escape becomes a no-op. chat-search-close X button works. Consider attaching the Escape handler at document level while search is open.", "selector": "[data-testid=\"chat-search-bar\"]", "priority": "LOW"},
+      {"component": "SettingsModal", "issue": "Modal cannot be closed with Escape key (same as UserManagement modal in iteration 1). This blocked automated flow that tried Escape -> user-menu after password change; had to be worked around. Use X or Cancel button.", "selector": "[data-testid=\"settings-tab-account\"]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_new_features.py",
+    "/app/test_reports/pytest/pytest_new_features.xml"
+  ],
+  "action_items": [
+    "Optional: add document-level Escape handler in ChatSearchBar so Escape works even when focus moved away from the input.",
+    "Optional (repeat from iteration 1): enable Escape-to-close on SettingsModal and UserManagement modal."
+  ],
+  "critical_code_review_comments": [
+    "server.py continues to grow (~765 lines). Splitting into modules (auth, admin, chats, connections, settings) is now more pressing.",
+    "GET /api/settings and PUT /api/settings are still unauthenticated (flagged in iteration 1) - anyone can read/overwrite the global system prompt. Should be admin-gated.",
+    "Sidebar.jsx /chats/search is called relying on axios.defaults.common Authorization header set by AuthContext. If a page mounts Sidebar before AuthContext hydrates token, request could go out unauth; consider passing headers explicitly to be robust.",
+    "ChatSearchBar Escape handler is bound to the input's onKeyDown only, so once the input loses focus (after Next/Prev scroll), Escape stops working - should be a document-level listener while bar is open.",
+    "Chat search snippet on backend uses only the first matched message per chat; consider surfacing best/most-recent match rather than first insertion order for better UX."
+  ],
+  "updated_files": ["/app/backend/tests/test_new_features.py", "/app/test_reports/iteration_2.json"],
+  "success_rate": {"backend": "100%", "frontend": "95%"},
+  "test_credentials": "Admin: admin@openwebui.local / Admin@123. Regular test users created as acct_test_<ts>@example.com and test_new_<ts>_<uuid>@example.com, all cleaned up.",
+  "seed_data_creation": "None persisted. Imported chats and test users deleted after tests.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "New feature endpoints (PUT /api/auth/profile, PUT /api/auth/password, GET /api/chats/search) and UI (ChatSearchBar Ctrl+F, sidebar content search with snippets, AccountTab) fully validated. Known low-priority UX bug: Escape does not close SettingsModal / UserManagement modal / ChatSearchBar-after-navigation. Prior /api/settings unauth issue still open. Backend test file: /app/backend/tests/test_new_features.py (existing /app/backend/tests/backend_test.py from iteration 1 also still valid)."
+}

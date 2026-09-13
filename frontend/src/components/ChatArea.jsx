@@ -21,7 +21,23 @@ const CopyButton = ({ text }) => {
   );
 };
 
-const MarkdownContent = ({ content }) => {
+const escapeRx = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const highlightText = (text, term) => {
+  if (!term) return text;
+  const parts = text.split(new RegExp(`(${escapeRx(term)})`, 'gi'));
+  return parts.map((p, i) => p.toLowerCase() === term.toLowerCase()
+    ? <mark key={i} className="bg-yellow-400/80 text-black rounded-sm px-0.5">{p}</mark>
+    : p);
+};
+
+const highlightChildren = (children, term) => {
+  if (!term) return children;
+  return React.Children.map(children, c => typeof c === 'string' ? highlightText(c, term) : c);
+};
+
+const MarkdownContent = ({ content, highlight }) => {
+  const h = (children) => highlightChildren(children, highlight);
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
@@ -61,26 +77,27 @@ const MarkdownContent = ({ content }) => {
               </div>
             );
           }
-          return <code className="bg-[#2a2a2a] text-orange-300 px-1.5 py-0.5 rounded text-[13px]" {...props}>{children}</code>;
+          return <code className="bg-[#2a2a2a] text-orange-300 px-1.5 py-0.5 rounded text-[13px]" {...props}>{h(children)}</code>;
         },
-        p: ({ children }) => <p className="mb-3 last:mb-0 leading-7">{children}</p>,
-        h1: ({ children }) => <h1 className="text-xl font-bold mb-3 mt-5">{children}</h1>,
-        h2: ({ children }) => <h2 className="text-lg font-semibold mb-2 mt-4">{children}</h2>,
-        h3: ({ children }) => <h3 className="text-base font-semibold mb-2 mt-3">{children}</h3>,
+        p: ({ children }) => <p className="mb-3 last:mb-0 leading-7">{h(children)}</p>,
+        h1: ({ children }) => <h1 className="text-xl font-bold mb-3 mt-5">{h(children)}</h1>,
+        h2: ({ children }) => <h2 className="text-lg font-semibold mb-2 mt-4">{h(children)}</h2>,
+        h3: ({ children }) => <h3 className="text-base font-semibold mb-2 mt-3">{h(children)}</h3>,
         ul: ({ children }) => <ul className="list-disc pl-6 mb-3 space-y-1">{children}</ul>,
         ol: ({ children }) => <ol className="list-decimal pl-6 mb-3 space-y-1">{children}</ol>,
-        li: ({ children }) => <li className="leading-7">{children}</li>,
-        strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+        li: ({ children }) => <li className="leading-7">{h(children)}</li>,
+        strong: ({ children }) => <strong className="font-semibold">{h(children)}</strong>,
+        em: ({ children }) => <em>{h(children)}</em>,
         table: ({ children }) => (
           <div className="overflow-x-auto my-3">
             <table className="min-w-full border-collapse border border-white/10 rounded">{children}</table>
           </div>
         ),
         thead: ({ children }) => <thead className="bg-white/5">{children}</thead>,
-        th: ({ children }) => <th className="border border-white/10 px-4 py-2 text-left text-sm font-medium">{children}</th>,
-        td: ({ children }) => <td className="border border-white/10 px-4 py-2 text-sm">{children}</td>,
+        th: ({ children }) => <th className="border border-white/10 px-4 py-2 text-left text-sm font-medium">{h(children)}</th>,
+        td: ({ children }) => <td className="border border-white/10 px-4 py-2 text-sm">{h(children)}</td>,
         blockquote: ({ children }) => <blockquote className="border-l-2 border-neutral-500 pl-4 italic text-neutral-400 my-3">{children}</blockquote>,
-        a: ({ children, href }) => <a href={href} className="text-blue-400 hover:underline" target="_blank" rel="noreferrer">{children}</a>,
+        a: ({ children, href }) => <a href={href} className="text-blue-400 hover:underline" target="_blank" rel="noreferrer">{h(children)}</a>,
       }}
     >
       {content}
@@ -88,14 +105,16 @@ const MarkdownContent = ({ content }) => {
   );
 };
 
-const MessageBubble = ({ message, isTyping }) => {
+const MessageBubble = ({ message, isTyping, highlight, isCurrentMatch }) => {
   const [hovering, setHovering] = React.useState(false);
   const { settings } = useSettings();
   const isUser = message.role === 'user';
 
   return (
     <div
-      className={`group py-3 ${isUser ? 'flex justify-end' : ''}`}
+      data-message-id={message.id}
+      data-testid={`message-${message.role}`}
+      className={`group py-3 rounded-2xl transition-shadow ${isUser ? 'flex justify-end' : ''} ${isCurrentMatch ? 'ring-2 ring-yellow-400/70 px-2 -mx-2' : ''}`}
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
     >
@@ -109,7 +128,7 @@ const MessageBubble = ({ message, isTyping }) => {
           }`}
           >
             {isUser && <div style={{ backgroundColor: settings.userBubbleBg, borderRadius: '1.5rem', padding: '12px 20px' }}>
-              {isTyping ? null : <span className="whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>{message.content}</span>}
+              {isTyping ? null : <span className="whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>{highlightText(message.content, highlight)}</span>}
             </div>}
             {!isUser && (isTyping ? (
               <div className="flex items-center gap-1 py-1">
@@ -119,7 +138,7 @@ const MessageBubble = ({ message, isTyping }) => {
               </div>
             ) : (
               <div className="prose-invert max-w-none" style={{ color: 'var(--text-primary)' }}>
-                <MarkdownContent content={message.content} />
+                <MarkdownContent content={message.content} highlight={highlight} />
               </div>
             ))}
           </div>
@@ -152,19 +171,24 @@ const MessageBubble = ({ message, isTyping }) => {
   );
 };
 
-const ChatArea = ({ messages, isTyping }) => {
+const ChatArea = ({ messages, isTyping, searchTerm = '', currentMatchId = null }) => {
   const scrollRef = useRef(null);
   const endRef = useRef(null);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isTyping]);
+    if (!searchTerm) endRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isTyping, searchTerm]);
+
+  useEffect(() => {
+    if (!currentMatchId) return;
+    scrollRef.current?.querySelector(`[data-message-id="${currentMatchId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [currentMatchId]);
 
   return (
     <div ref={scrollRef} className="flex-1 overflow-y-auto">
       <div className="max-w-3xl mx-auto px-4 py-4">
         {messages.map(msg => (
-          <MessageBubble key={msg.id} message={msg} />
+          <MessageBubble key={msg.id} message={msg} highlight={searchTerm} isCurrentMatch={msg.id === currentMatchId} />
         ))}
         {isTyping && (
           <MessageBubble
