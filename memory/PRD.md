@@ -266,6 +266,8 @@ A self-hosted, multi-model AI chat interface inspired by Open WebUI. The product
 
 - 2026-06: **Folder Reordering** — drag folder headers (before/after blue indicator; disabled during search); `position` field, `PUT /api/folders/order {ids}` (must list all own folders once, else 400); new folders appended at bottom. Admin user delete now also removes their folders. Tested: iteration 7 — backend 47/47, frontend 100% (covers Instructions, New Chat in Folder, Colours/Icons, Reordering).
 
+- 2026-07: **Documentation pass** — `README.md` rewritten to cover Chat Folders (create/reorder/instructions/colours/+New-in-folder), updated project structure (hooks/useFolders.js, FolderSection.jsx, FolderSettingsDialog.jsx, ChatRow.jsx, ChatRowMenu.jsx, folderStyles.js), full Folders API table and `folders` Mongo collection; `contracts.md` updated with `/folders*` and `/chats/{id}/folder` contracts plus frontend integration notes on folder system-prompt composition. New **`DEPLOYMENT.md`** added: prerequisites, env var reference, `.env.example` for backend/frontend, local/staging/production steps, build & startup commands (no DB migration framework — indexes + idempotent admin seed run on every startup via FastAPI lifespan), health-check verification, troubleshooting table, rollback guidance. No application code changed.
+
 ### 10. Backlog
 - P1: Polish Admin Panel to match Open WebUI look (table layout, last-active column)
 - P2: Streaming responses, file upload, mobile layout, admin signup toggle, replace window.confirm/alert with in-app dialogs

@@ -39,6 +39,15 @@ A full-stack, multi-user AI chat application inspired by [Open WebUI](https://gi
 - Archived Chats panel with restore, delete and delete-all
 - Auto-titling from the first message
 
+### Chat Folders
+- Create, rename, delete and collapse per-user folders; sit below **Pinned**, above the date groups
+- Drag a chat onto a folder to file it, or drag it back to the main list to remove it — "Move to folder" is also available from the chat's ⋯ menu
+- **Drag folder headers** to reorder them (blue landing line shows the drop position); new folders are appended at the bottom
+- **Per-folder instructions** (≤4000 chars): appended after the global System Prompt for every chat inside that folder (edit via the sliders icon on hover)
+- **"+" on a folder** starts a new chat pre-tagged for that folder — the chat is only persisted once the first message is sent
+- **Colour & icon** per folder (10 colours + 16 icons), shown as a tinted icon and a subtle tinted left border on the folder's chats
+- Deleting a folder returns its chats to the main list; deleting a user also deletes their folders
+
 ### Settings & Customization
 - **General**: app name, logo (text or image upload), logo colors
 - **Theme**: 6 presets (Dark, Midnight Blue, Forest, Rosé, OLED Dark, Light) + custom color pickers for main background, sidebar, input, accent and user bubble
@@ -81,16 +90,24 @@ A full-stack, multi-user AI chat application inspired by [Open WebUI](https://gi
 │   │   │   ├── SettingsModal.jsx  # Connections*, Models*, General, Theme, System Prompt, Account (*admin only)
 │   │   │   ├── AccountTab.jsx     # Display name + password change
 │   │   │   ├── UserManagement.jsx # Admin user CRUD modal
+│   │   │   ├── FolderSection.jsx  # Folder list: collapse, drag/drop, reorder, +New/edit icons
+│   │   │   ├── FolderSettingsDialog.jsx # Edit folder name / instructions / colour / icon
+│   │   │   ├── ChatRow.jsx        # Single chat row (drag source, tinted folder border)
+│   │   │   ├── ChatRowMenu.jsx    # ⋯ menu: rename, pin, move to folder, archive, export, delete
+│   │   │   ├── folderStyles.js    # Shared colour/icon maps for folders
 │   │   │   └── ui/                # shadcn/ui primitives
 │   │   ├── context/
 │   │   │   ├── AuthContext.jsx    # JWT storage, axios auth header, 401 auto-logout
 │   │   │   └── SettingsContext.jsx
+│   │   ├── hooks/
+│   │   │   └── useFolders.js      # Folder CRUD/reorder/move-chat API calls + local state
 │   │   └── data/mockData.js       # Suggestion cards
 │   └── .env                       # REACT_APP_BACKEND_URL
 ├── memory/
 │   ├── PRD.md                     # Product requirements & changelog
 │   └── test_credentials.md        # Seeded admin credentials for testing
 ├── contracts.md                   # API contracts
+├── DEPLOYMENT.md                  # Local / staging / production deployment guide
 └── README.md
 ```
 
@@ -149,9 +166,19 @@ All routes are prefixed with `/api`. Authenticated routes expect `Authorization:
 | GET | `/chats/archived` | user | Archived chats |
 | PUT | `/chats/:id/pin` · `/unpin` | user | Pin / unpin (archiving also unpins) |
 | PUT | `/chats/:id/archive` · `/unarchive` | user | Archive / restore |
+| PUT | `/chats/:id/folder` | user | Move chat `{folder_id\|null}` into / out of a folder |
 | DELETE | `/chats/archived/all` | user | Delete all archived |
 | GET | `/chats/:id/export` | user | Export as JSON |
 | POST | `/chats/import` | user | Import from JSON |
+
+### Folders
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/folders` | user | List the caller's folders, ordered by `position` |
+| POST | `/folders` | user | Create `{name, instructions?, color?, icon?}` (max 200/user, case-insensitive unique name) |
+| PUT | `/folders/:id` | user | Rename / update instructions, color, icon |
+| DELETE | `/folders/:id` | user | Delete folder; its chats return to the main list |
+| PUT | `/folders/order` | user | Reorder `{ids: [...]}` — must list every owned folder id exactly once |
 
 ### Settings
 | Method | Endpoint | Auth | Description |
@@ -185,9 +212,10 @@ All routes are prefixed with `/api`. Authenticated routes expect `Authorization:
 | Collection | Purpose |
 |------------|----------|
 | `users` | `{id, name, email, password_hash, role, created_at}` — unique index on `email` |
-| `chats` | `{id, title, model, user_id, archived, pinned, created_at}` |
+| `chats` | `{id, title, model, user_id, archived, pinned, folder_id, created_at}` |
 | `login_attempts` | `{identifier, count, locked_until}` — brute-force lockout |
 | `messages` | `{id, chat_id, role, content, timestamp}` |
+| `folders` | `{id, name, instructions, color, icon, position, user_id, created_at}` — per-user |
 | `connections` | Provider API keys / base URLs, default model, enabled models |
 | `app_settings` | Theme, logo, font size, system prompt |
 
@@ -208,6 +236,8 @@ yarn start
 ```
 
 Sign in with the seeded admin (`ADMIN_EMAIL` / `ADMIN_PASSWORD` from `backend/.env`) or create an account — the first account created becomes admin.
+
+For staging/production deployment (build commands, migrations, health checks, troubleshooting), see **[DEPLOYMENT.md](./DEPLOYMENT.md)**.
 
 ---
 
