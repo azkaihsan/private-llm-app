@@ -206,7 +206,7 @@ const SettingsModal = ({ open, onClose, onModelsChanged }) => {
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: `1px solid ${isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.08)'}` }}>
             <h2 className="text-lg font-semibold">Settings</h2>
-            <button onClick={onClose} className="p-1.5 rounded-lg transition-colors" style={{ color: isLight ? '#666' : '#999' }}>
+            <button data-testid="settings-close-button" onClick={onClose} className="p-1.5 rounded-lg transition-colors" style={{ color: isLight ? '#666' : '#999' }}>
               <X size={20} />
             </button>
           </div>
@@ -625,7 +625,7 @@ const SettingsModal = ({ open, onClose, onModelsChanged }) => {
                     <label className="block text-sm font-medium mb-3" style={{ color: labelColor }}>Theme Presets</label>
                     <div className="grid grid-cols-3 gap-2">
                       {Object.entries(themePresets).map(([key, preset]) => (
-                        <button key={key} onClick={() => handleThemePreset(key)} className="relative flex flex-col items-center gap-2 p-3 rounded-xl text-xs font-medium transition-all" style={{ border: `2px solid ${localSettings.theme === key ? preset.accentColor : (isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.08)')}`, backgroundColor: isLight ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.02)' }}>
+                        <button key={key} data-testid={`theme-preset-${key}`} onClick={() => handleThemePreset(key)} className="relative flex flex-col items-center gap-2 p-3 rounded-xl text-xs font-medium transition-all" style={{ border: `2px solid ${localSettings.theme === key ? preset.accentColor : (isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.08)')}`, backgroundColor: isLight ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.02)' }}>
                           <div className="flex gap-1 w-full">
                             <div className="w-6 h-8 rounded" style={{ backgroundColor: preset.sidebarBg }} />
                             <div className="flex-1 h-8 rounded" style={{ backgroundColor: preset.mainBg }} />
@@ -679,14 +679,14 @@ const SettingsModal = ({ open, onClose, onModelsChanged }) => {
 
           {/* Footer */}
           <div className="flex items-center justify-between px-6 py-4" style={{ borderTop: `1px solid ${isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.08)'}` }}>
-            <button onClick={handleReset} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors" style={{ color: isLight ? '#666' : '#999' }}>
+            <button data-testid="settings-reset-button" onClick={handleReset} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors" style={{ color: isLight ? '#666' : '#999' }}>
               <RotateCcw size={14} /> Reset to Defaults
             </button>
             <div className="flex gap-2">
-              <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm transition-colors" style={{ backgroundColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)', color: isLight ? '#333' : '#ccc' }}>
+              <button data-testid="settings-cancel-button" onClick={onClose} className="px-4 py-2 rounded-lg text-sm transition-colors" style={{ backgroundColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)', color: isLight ? '#333' : '#ccc' }}>
                 Cancel
               </button>
-              <button onClick={handleSave} className="px-5 py-2 rounded-lg text-sm font-medium transition-colors" style={{ backgroundColor: localSettings.accentColor, color: isLightBg(localSettings.accentColor) ? '#000' : '#fff' }}>
+              <button data-testid="settings-save-button" onClick={handleSave} className="px-5 py-2 rounded-lg text-sm font-medium transition-colors" style={{ backgroundColor: localSettings.accentColor, color: isLightBg(localSettings.accentColor) ? '#000' : '#fff' }}>
                 Save
               </button>
             </div>

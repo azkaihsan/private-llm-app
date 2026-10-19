@@ -466,7 +466,8 @@ function AppContent() {
 
 function AuthGate() {
   const { user, loading } = useAuth();
-  const { settings } = useSettings();
+  const { settings, applyLocalTheme } = useSettings();
+  useEffect(() => { applyLocalTheme(user?.id); }, [user?.id, applyLocalTheme]);
   if (loading) {
     return (
       <div data-testid="auth-loading" className="h-screen flex items-center justify-center" style={{ backgroundColor: settings.mainBg }}>

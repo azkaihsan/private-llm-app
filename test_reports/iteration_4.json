@@ -1,0 +1,44 @@
+{
+  "summary": "Iteration 4: backend + frontend testing of Pinned Chats and security hardening. Backend 15/16 pytest passed (test_iter4_pins_security.py). Pins (pin/unpin/404 isolation/archive-unpins), signup/admin-user validation, admin self-role/email-dup/404/empty-body rules, settings authz (401/403/200) + key sanitization + fontSize 400/clamp-24, legacy /api/status removed, chat message/title validation, cross-user delete isolation, import validation (system role/2001 msgs -> 422, pinned:false), search (1-char [], 300-char 200, '(.*' literal), connections test/unknown/sanitize, and LLM memory ('teal' recalled) all PASS. FAILED: login lockout - 6th wrong attempt returned 401 instead of 429 because lockout is keyed by request.client.host which alternates between ingress pod IPs (10.208.133.66 / .69), splitting the counter. Frontend: pin via hover toggle + via ⋯ menu (Pin/Unpin label), Pinned group at top, persistence after reload, unpin, archive removes from Pinned - all PASS. Settings gating: admin sees 6 tabs; regular user sees only theme+account, theme-local-note shown, Forest preset applies with no 4xx/console errors, persists after reload. BUG: device-local theme leaks to admin on the same browser after logout/login (admin saw user's Forest bg instead of global Midnight Blue). Stale-chat guard PASS (1 LLM call): reply did not leak into other chat, no stuck typing, reply visible when returning to chat A. Regression PASS: login/logout, in-chat search (1/2), Ctrl+K palette, UM create/delete, Account name change.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/auth/login", "issue": "Brute-force lockout ineffective in deployed env: identifier = f'{request.client.host}:{email}', but client.host is the k8s ingress pod IP which varies per request (observed 10.208.133.66 and 10.208.133.69 in db.login_attempts for the same email). Counter is split across IPs, so 6th/7th wrong attempts still return 401 (an attacker gets ~5 x N_ingress attempts per window). Also, if a single ingress IP were used, all users share one 'IP', making the IP part meaningless. Fix: key lockout by email only (or by first hop of X-Forwarded-For + email, accepting spoofability), and on success delete all records for that email.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "CORS", "issue": "CORS_ORIGINS='*' with allow_credentials=True -> Starlette reflects any Origin (verified Origin: https://evil.com echoed with allow-credentials:true). Low impact since auth is Bearer header, but set explicit origins."},
+      {"endpoint": "POST /api/auth/login", "issue": "Successful login only clears the record for the current ip:email identifier; records from other ingress IPs remain (same root cause as above)."},
+      {"endpoint": "PUT /api/connections", "issue": "$set on 'providers' replaces the entire providers object; a partial providers payload wipes other providers' configs (API keys). Consider per-provider $set (providers.<key>) merge."},
+      {"endpoint": "PUT /api/settings", "issue": "Allowlisted color/theme values are not type/format validated (e.g., mainBg can be an object or arbitrary CSS string). Old stored 'label' key from previous saves still present in global settings doc."},
+      {"endpoint": "POST /api/chats/import", "issue": "ImportMessage.content defaults to '' so empty messages can be imported."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "SettingsContext (local theme)", "issue": "openwebui_local_theme is device-wide, not per-user, and not cleared on logout. After a regular user saves a local theme and logs out, the admin logging in on the same browser sees the user's theme instead of the global theme. Worse, if the admin then opens Settings and clicks Save, the leaked local values become the GLOBAL theme. Fix: key local theme by user id (e.g. openwebui_local_theme_<userId>) and/or clear on logout, and ignore local override when isAdmin.", "selector": "localStorage openwebui_local_theme", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iter4_pins_security.py", "/app/test_reports/pytest/pytest_iter4.xml", "/app/tests/seed_iter4.py"],
+  "action_items": [
+    "Fix login lockout identifier (key by email, or X-Forwarded-For first hop + email) so 5 failures lock reliably behind the multi-pod ingress; clear all records for the email on success.",
+    "Make the non-admin local theme per-user (key by user id) and/or clear on logout; do not apply local override for admins.",
+    "Set explicit CORS_ORIGINS instead of '*' with credentials.",
+    "Optional: merge provider configs in PUT /api/connections instead of replacing the whole providers object."
+  ],
+  "critical_code_review_comments": [
+    "server.py check_lockout/record_failed_login: per ip:email design is broken behind k8s ingress (see RCA).",
+    "server.py update_connections: '$set providers' overwrites full map - partial client payload drops other providers' keys.",
+    "SettingsContext.jsx readLocalTheme() is applied in initial state and after GET /settings regardless of user role.",
+    "SettingsModal handleReset uses stale `settings` for setLocalSettings right after resetSettings (harmless since modal closes).",
+    "App.js stale guard: when the reply to chat A arrives while viewing B it is dropped (correct); A's messages refetch on revisit (verified)."
+  ],
+  "updated_files": ["/app/frontend/src/components/SettingsModal.jsx (added data-testid: theme-preset-<key>, settings-save-button, settings-cancel-button, settings-reset-button, settings-close-button)", "/app/backend/tests/test_iter4_pins_security.py", "/app/tests/seed_iter4.py"],
+  "success_rate": {"backend": "94% (15/16)", "frontend": "92% (all flows pass; 1 theme-leak bug)"},
+  "test_credentials": "admin@openwebui.local / Admin@123 (no wrong attempts made on admin). Throwaway users test_t4_*/test_ui4_*/test_um4_* created and deleted.",
+  "seed_data_creation": "Two TEST4 chats imported for admin and deleted afterwards; all test users, their chats and login_attempts records cleaned. Pre-existing admin chats (Zoo animals, Wombat notes, Imported zebra) untouched except 1 LLM exchange added to TEST4 Alpha (deleted). Global settings restored (fontSize 15).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run pytest /app/backend/tests/test_iter4_pins_security.py (LLM memory + connection test use ~3 LLM calls). Only TestLockout::test_lockout_after_5 failed. Pin testids verified: chat-row-<id>, chat-pin-toggle-<id>, chat-menu-<id>, chat-menu-pin-<id>, chat-group-pinned. Settings testids: settings-tab-<id>, theme-preset-<key>, settings-save-button, theme-local-note. After fixes, retest lockout and the theme leak (user saves Forest -> logout -> admin login should show global theme).",
+  "rca of the issue": "Lockout: request.client.host = ingress pod IP; db.login_attempts showed '10.208.133.66:<email>' count 3 and '10.208.133.69:<email>' count 3 after 6 failures, so neither reached 5 -> no 429. Repro: create user, POST /api/auth/login wrong password 6x -> 6th returns 401. Mitigation: identifier=email (or XFF-based). Theme leak: SettingsProvider merges openwebui_local_theme for any logged-in user; logout doesn't remove it. Repro: signup user -> Settings -> Theme -> Forest -> Save -> logout -> login admin -> body bg rgb(26,36,33) instead of rgb(26,26,46)."
+}

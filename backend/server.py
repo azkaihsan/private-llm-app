@@ -4,7 +4,7 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -202,10 +202,9 @@ async def signup(data: SignupRequest):
 
 
 @api_router.post("/auth/login")
-async def login(data: LoginRequest, request: Request):
+async def login(data: LoginRequest):
     email = data.email.strip().lower()
-    ip = request.client.host if request.client else "unknown"
-    identifier = f"{ip}:{email}"
+    identifier = email
     await check_lockout(identifier)
     user = await db.users.find_one({"email": email})
     if not user or not verify_password(data.password, user["password_hash"]):

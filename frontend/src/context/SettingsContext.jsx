@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -74,9 +74,20 @@ const themePresets = {
 
 const LOCAL_THEME_KEY = 'openwebui_local_theme';
 const THEME_KEYS = ['theme', 'mainBg', 'sidebarBg', 'inputBg', 'accentColor', 'userBubbleBg', 'fontSize'];
+const localKey = (scope) => `${LOCAL_THEME_KEY}:${scope}`;
 
-const readLocalTheme = () => {
-  try { return JSON.parse(localStorage.getItem(LOCAL_THEME_KEY)) || {}; } catch { return {}; }
+const readLocalTheme = (scope) => {
+  if (!scope) return {};
+  try { return JSON.parse(localStorage.getItem(localKey(scope))) || {}; } catch { return {}; }
+};
+
+const readSavedGlobal = () => {
+  try {
+    const saved = localStorage.getItem('openwebui_settings');
+    return { ...defaultSettings, ...(saved ? JSON.parse(saved) : {}) };
+  } catch {
+    return defaultSettings;
+  }
 };
 
 const SettingsContext = createContext();
@@ -84,14 +95,10 @@ const SettingsContext = createContext();
 export const useSettings = () => useContext(SettingsContext);
 
 export const SettingsProvider = ({ children }) => {
-  const [settings, setSettings] = useState(() => {
-    try {
-      const saved = localStorage.getItem('openwebui_settings');
-      return { ...defaultSettings, ...(saved ? JSON.parse(saved) : {}), ...readLocalTheme() };
-    } catch {
-      return defaultSettings;
-    }
-  });
+  const [globalSettings, setGlobalSettings] = useState(readSavedGlobal);
+  const [localOverride, setLocalOverride] = useState({});
+  const [scope, setScope] = useState(null);
+  const settings = useMemo(() => ({ ...globalSettings, ...localOverride }), [globalSettings, localOverride]);
 
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
@@ -103,7 +110,7 @@ export const SettingsProvider = ({ children }) => {
         if (res.data && Object.keys(res.data).length > 0) {
           const merged = { ...defaultSettings, ...res.data };
           localStorage.setItem('openwebui_settings', JSON.stringify(merged));
-          setSettings({ ...merged, ...readLocalTheme() });
+          setGlobalSettings(merged);
         }
       } catch (e) {
         // Backend settings not available, use localStorage
@@ -111,6 +118,12 @@ export const SettingsProvider = ({ children }) => {
       setSettingsLoaded(true);
     };
     load();
+  }, []);
+
+  // Called by the auth layer: applies the signed-in user's device-local theme (or clears it on logout)
+  const applyLocalTheme = useCallback((userId) => {
+    setScope(userId || null);
+    setLocalOverride(readLocalTheme(userId));
   }, []);
 
   // Apply CSS variables whenever settings change
@@ -134,44 +147,41 @@ export const SettingsProvider = ({ children }) => {
     root.style.setProperty('--code-bg', isLight ? '#f0f0f0' : '#1e1e1e');
   }, [settings]);
 
-  // Admins persist globally; other users keep a device-local theme override.
+  // Admins persist globally; other users keep a device-local theme override scoped to their user id.
   const updateSettings = useCallback(async ({ remote = true } = {}, newSettings) => {
     const merged = { ...settings, ...newSettings };
-    setSettings(merged);
     if (!remote) {
       const local = Object.fromEntries(THEME_KEYS.filter(k => k in merged).map(k => [k, merged[k]]));
-      localStorage.setItem(LOCAL_THEME_KEY, JSON.stringify(local));
+      if (scope) localStorage.setItem(localKey(scope), JSON.stringify(local));
+      setLocalOverride(local);
       return;
     }
+    setGlobalSettings(merged);
+    setLocalOverride({});
+    if (scope) localStorage.removeItem(localKey(scope));
     localStorage.setItem('openwebui_settings', JSON.stringify(merged));
-    localStorage.removeItem(LOCAL_THEME_KEY);
     try {
       await axios.put(`${API}/settings`, merged);
     } catch (e) {
       console.error('Failed to save settings:', e);
     }
-  }, [settings]);
+  }, [settings, scope]);
 
   const resetSettings = useCallback(async ({ remote = true } = {}) => {
-    localStorage.removeItem(LOCAL_THEME_KEY);
-    if (!remote) {
-      try {
-        const saved = JSON.parse(localStorage.getItem('openwebui_settings')) || {};
-        setSettings({ ...defaultSettings, ...saved });
-      } catch { setSettings(defaultSettings); }
-      return;
-    }
-    setSettings(defaultSettings);
+    if (scope) localStorage.removeItem(localKey(scope));
+    setLocalOverride({});
+    if (!remote) return;
+    setGlobalSettings(defaultSettings);
     localStorage.setItem('openwebui_settings', JSON.stringify(defaultSettings));
     try {
       await axios.put(`${API}/settings`, defaultSettings);
     } catch (e) {
       console.error('Failed to reset settings:', e);
     }
-  }, []);
+  }, [scope]);
 
   return (
-    <SettingsContext.Provider value={{ settings, updateSettings, resetSettings, themePresets, defaultSettings }}>
+    <SettingsContext.Provider value={{ settings, updateSettings, resetSettings, applyLocalTheme, themePresets, defaultSettings }}>
       {children}
     </SettingsContext.Provider>
   );
