@@ -9,7 +9,9 @@ const ChatRowMenu = ({ chat, folders, actions, onClose, onRename }) => {
 
   const position = (el) => {
     if (!el) return;
-    const row = el.parentElement?.getBoundingClientRect();
+    let anchor = el.parentElement;
+    while (anchor && getComputedStyle(anchor).display === 'contents') anchor = anchor.parentElement;
+    const row = anchor?.getBoundingClientRect();
     if (!row) return;
     const top = Math.min(row.bottom + 4, window.innerHeight - el.offsetHeight - 8);
     el.style.top = `${Math.max(8, top)}px`;

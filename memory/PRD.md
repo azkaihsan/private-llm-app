@@ -256,6 +256,8 @@ A self-hosted, multi-model AI chat interface inspired by Open WebUI. The product
 
 - 2026-06: **Pinned Chats** (pin icon on hover + ⋯ menu, "Pinned" section at top, `PUT /api/chats/{id}/pin|unpin`, archive unpins) and a **security/code-review hardening pass** (see CHANGELOG below). Tested: backend 21/21, frontend E2E pass (iterations 4-5).
 
+- 2026-06: **Chat Folders** — per-user named folders (`folders` collection; `GET/POST /api/folders`, `PUT/DELETE /api/folders/{id}`, `PUT /api/chats/{id}/folder {folder_id|null}`). Sidebar order: Pinned → Folders → date groups. HTML5 drag chat onto folder / back to main list, "Move to folder" submenu, inline create/rename, delete (chats return to main list), collapse state per user in localStorage (`openwebui_collapsed_folders_<userId>`), case-insensitive unique names (409), 60-char limit, 200 folders max. Pinned chats keep folder membership. Toasts via sonner. Files: `hooks/useFolders.js`, `components/ChatRow.jsx`, `ChatRowMenu.jsx`, `FolderSection.jsx`. Tested: iteration 6 backend 16/16, frontend 100% (menu-position bug fixed).
+
 ### 10. Backlog
 - P1: Polish Admin Panel to match Open WebUI look (table layout, last-active column)
 - P2: Streaming responses, file upload, mobile layout, admin signup toggle, replace window.confirm/alert with in-app dialogs
