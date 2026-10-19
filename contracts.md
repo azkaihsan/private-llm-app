@@ -5,7 +5,7 @@ Roles: `admin` (everything) and `user`. Errors: `401` not authenticated, `403` a
 
 ## Auth
 - `POST /auth/signup` `{name, email, password}` → `{token, user}` — first user ever becomes `admin`, others `user`; duplicate email → 400
-- `POST /auth/login` `{email, password}` → `{token, user}`; bad credentials → 401
+- `POST /auth/login` `{email, password}` → `{token, user}`; bad credentials → 401; 5 failures per email → 429 for 15 min
 - `GET /auth/me` → `{id, name, email, role, created_at}`
 - `PUT /auth/profile` `{name}` → updated user; empty name → 400
 - `PUT /auth/password` `{current_password, new_password}` → `{success: true}`; wrong current or new < 6 chars → 400
@@ -13,7 +13,7 @@ Roles: `admin` (everything) and `user`. Errors: `401` not authenticated, `403` a
 ## Admin — Users (admin only)
 - `GET /admin/users` → `[user]`
 - `POST /admin/users` `{name, email, password, role}` → user
-- `PUT /admin/users/{id}` `{name?, email?, role?, password?}` → user
+- `PUT /admin/users/{id}` `{name?, email?, role?, password?}` → `{status}`; own-role change → 400
 - `DELETE /admin/users/{id}` → `{status: "ok"}`; deletes the user's chats/messages; self-delete → 400
 
 ## Connections & Models
@@ -31,13 +31,14 @@ Roles: `admin` (everything) and `user`. Errors: `401` not authenticated, `403` a
 - `PUT /chats/{id}` `{title}` → `{status}`
 - `DELETE /chats/{id}` → `{status}`
 - `POST /chats/{id}/messages` `{content, temperature?, max_tokens?}` → `{user_message, assistant_message}`
+- `PUT /chats/{id}/pin` · `PUT /chats/{id}/unpin` → `{status}` (archive also sets `pinned: false`)
 - `PUT /chats/{id}/archive` · `PUT /chats/{id}/unarchive`
 - `DELETE /chats/archived/all`
 - `GET /chats/{id}/export` → `{version, chat, messages}`
 - `POST /chats/import` `{version, chat: {title, model}, messages: [{role, content}]}` → `{status, chat_id, chat}`
 
-## Settings (global appearance, public)
-- `GET /settings` · `PUT /settings` `{appName, logo*, theme, colors..., fontSize, systemPrompt}`
+## Settings (global appearance)
+- `GET /settings` (public) · `PUT /settings` (admin; allowlisted keys only) `{appName, logo*, theme, colors..., fontSize, systemPrompt}`
 
 ## Frontend integration notes
 - `AuthContext` stores the token in `localStorage.openwebui_token`, sets `axios.defaults.headers.common.Authorization` synchronously on login, and auto-logs out on any 401.

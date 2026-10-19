@@ -1,0 +1,31 @@
+{
+  "summary": "Retested the 2 bugs from iteration 4 and ran a quick regression. Both bugs are fixed. (1) Login lockout is now keyed by normalized email: 5 wrong passwords each return 401, and the 6th attempt returns 429 'Too many failed attempts' even with the correct password (the uppercase email is locked too). A success after 3 failures clears the counter, and 3 more failures then return 401, not 429. (2) Theme isolation works. Admin sees the global theme (midnight-blue #1a1a2e) and 6 Settings tabs. A regular user sees 2 tabs plus the local-theme note. Picking Forest and saving turns the background to #1a2421, and it survives a reload. localStorage has key openwebui_local_theme:<userId>. After logout the login page shows the global theme, and admin still sees the global theme. When the user logs back in, Forest returns. No 4xx responses or console errors. Regression: admin pin/unpin works (the Pinned group header appears, then disappears on unpin). Admin Theme -> Rosé -> Save updated GET /api/settings globally; the previous midnight-blue theme was restored afterwards. GET /api/chats as admin returns 200; PUT /api/settings as a user returns 403. All 21 pytest tests passed (iter5 + iter4 suites).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "DELETE /api/admin/users/{id}", "issue": "Deleting a user leaves their db.login_attempts row (keyed by email) in place. If the email is re-registered within 15 minutes, the new user starts out locked or partly counted. Low impact."},
+      {"endpoint": "PUT /api/settings", "issue": "The global settings document contains a 'label' key ('Midnight Blue') copied from the theme preset object. It is allowed through the sanitize allowlist or the frontend sends it. Cosmetic."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iter5_lockout_regression.py", "/app/backend/tests/test_iter4_pins_security.py", "/app/test_reports/pytest/pytest_iter5.xml"],
+  "action_items": [
+    "Optional: delete db.login_attempts for the user's email when an admin deletes the user",
+    "Optional: strip the preset 'label' key before saving the global settings"
+  ],
+  "critical_code_review_comments": [
+    "Lockout by email only allows a targeted denial of service: anyone can lock out any known account, including the admin, for 15 minutes with 5 bad attempts. Consider an email+IP composite, or an admin unlock path.",
+    "SettingsContext keeps the per-user override in localStorage after logout (by design, so it comes back on re-login). Only the in-memory override is cleared, which is correct."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter5_lockout_regression.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@openwebui.local / Admin@123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Throwaway test_t4_*/test_t5_* users, their chats and their login_attempts rows were all cleaned up. A TEST_iter5 pin chat was created and deleted. The admin global theme was restored to midnight-blue.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Global theme is midnight-blue. Sidebar group headers (chat-group-*) are siblings of the chat-row-* elements, not their containers. Never trigger lockout on the admin account."
+}

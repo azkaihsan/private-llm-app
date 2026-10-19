@@ -254,6 +254,32 @@ A self-hosted, multi-model AI chat interface inspired by Open WebUI. The product
 
 - 2026-06: Ctrl+K command palette (frontend E2E pass, 6/6 scenarios). README.md and contracts.md rewritten to cover auth, roles, search, account and all endpoints.
 
+- 2026-06: **Pinned Chats** (pin icon on hover + ⋯ menu, "Pinned" section at top, `PUT /api/chats/{id}/pin|unpin`, archive unpins) and a **security/code-review hardening pass** (see CHANGELOG below). Tested: backend 21/21, frontend E2E pass (iterations 4-5).
+
 ### 10. Backlog
 - P1: Polish Admin Panel to match Open WebUI look (table layout, last-active column)
-- P2: Streaming responses, file upload, mobile layout, admin signup toggle
+- P2: Streaming responses, file upload, mobile layout, admin signup toggle, replace window.confirm/alert with in-app dialogs
+
+### 11. Hardening Changelog (2026-06 code review)
+**Backend (`server.py`)**
+- Removed hardcoded JWT secret fallback — `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` must be set (fail fast).
+- Replaced `passlib` with direct `bcrypt` (passlib is unmaintained and breaks with bcrypt ≥4.1); existing `$2b$` hashes remain valid. Passwords capped at 72 bytes.
+- Login brute-force protection: 5 failures per email → 15 min lockout (`login_attempts` collection, 429).
+- Input validation via Pydantic validators: email format + lowercase, name 1-60 chars, password ≥6, role literal, chat title 1-200, message 1-32k chars, temperature 0-2, top_p 0-1, max_tokens bounded, search `q` capped at 200 chars.
+- Admin safety: cannot change own role; email uniqueness on update; 404 for unknown ids; "no fields" → 400.
+- **Fixed IDOR**: `DELETE /chats/{id}` deleted messages of any chat id even when the chat wasn't owned — now checks ownership first.
+- **Fixed LLM memory bug**: OpenAI/Anthropic/Gemini calls created a fresh `LlmChat` each turn with no history → model had no conversation context. History (last 50 msgs, correct order) is now passed via `initial_messages`; litellm providers get the same history. Previously history used the *first* 50 messages instead of the latest.
+- LLM provider keys passed as per-request kwargs instead of mutating `os.environ` (race across concurrent requests).
+- Connection test: `apiKey:"emergent"` now resolves to the env key; a concrete default model is used instead of `None`.
+- `/api/settings` writes are admin-only; reads public. `$`/dotted/`_id`/unknown keys stripped from settings and connections payloads (NoSQL key-injection); fontSize clamped 10-24; systemPrompt ≤ 8000 chars; logo ≤ ~512KB.
+- Import: role restricted to user/assistant, ≤ 2000 messages, title/model length caps, `insert_many`.
+- Error responses no longer leak provider exceptions to regular users (admins get a short sanitized hint).
+- Removed legacy unauthenticated `/api/status` endpoints and unused `get_optional_user`.
+- Indexes: `users.email` (unique), `users.id`, `chats(user_id, archived, created_at)`, `chats.id`, `messages(chat_id, timestamp)`.
+- Chat list cap raised 100 → 1000; `on_event` replaced with lifespan.
+
+**Frontend**
+- Stale-response guard: a reply arriving after switching chats no longer appears in the wrong chat; new-chat creation no longer wipes the optimistic message; 404 on an open chat removes it from the list.
+- Friendly in-chat error bubble when sending fails.
+- Non-admins: General/System Prompt tabs hidden; Theme saved per-user on-device (`openwebui_local_theme:<userId>`), cleared on logout so it can't leak to other accounts; admins save globally.
+- Pydantic 422 arrays rendered as readable messages on auth forms.

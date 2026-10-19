@@ -24,8 +24,9 @@ A full-stack, multi-user AI chat application inspired by [Open WebUI](https://gi
 - Two roles: **admin** and **user**. The first account ever created becomes admin; a default admin is also seeded from `.env`
 - Every user sees only their own chats
 - **Admin Panel → User Management**: list, search, create, edit (name / email / role / password) and delete users
-- **Connections** and **Models** settings are admin-only
+- **Connections**, **Models**, **General** and **System Prompt** settings are admin-only; non-admins get a device-local **Theme** and the **Account** tab
 - **Account** tab: change display name and password
+- Login brute-force lockout (5 failures → 15 min), strict input validation, NoSQL key sanitization
 
 ### Search
 - **Ctrl/Cmd + K command palette** — from anywhere: jump to a chat by title, jump to a message match (opens the chat and highlights the term), or run quick actions (New Chat, Settings, Archived Chats, Admin Panel)
@@ -33,6 +34,7 @@ A full-stack, multi-user AI chat application inspired by [Open WebUI](https://gi
 - **Sidebar search** matches chat titles *and* message content, showing a snippet under the chat
 
 ### Chat Management
+- **Pin** favourite chats to a "Pinned" section at the top of the sidebar (hover pin icon or ⋯ menu)
 - Export (JSON), Import, Archive / Unarchive, Rename, Delete
 - Archived Chats panel with restore, delete and delete-all
 - Auto-titling from the first message
@@ -50,7 +52,7 @@ A full-stack, multi-user AI chat application inspired by [Open WebUI](https://gi
 | Layer | Technology |
 |------------|---------------------------------------------|
 | Frontend | React 19, Tailwind CSS, shadcn/ui, Lucide Icons, Axios |
-| Backend | FastAPI, Pydantic v2, Motor (async MongoDB), PyJWT, passlib/bcrypt |
+| Backend | FastAPI, Pydantic v2, Motor (async MongoDB), PyJWT, bcrypt |
 | Database | MongoDB |
 | LLM | emergentintegrations (OpenAI, Anthropic, Gemini) + litellm (DeepSeek, Qwen, Grok, Perplexity, Bedrock, OpenAI-compatible) |
 | Markdown | react-markdown, remark-gfm, react-syntax-highlighter |
@@ -145,6 +147,7 @@ All routes are prefixed with `/api`. Authenticated routes expect `Authorization:
 | DELETE | `/chats/:id` | user | Delete chat + messages |
 | POST | `/chats/:id/messages` | user | Send message, receive AI reply |
 | GET | `/chats/archived` | user | Archived chats |
+| PUT | `/chats/:id/pin` · `/unpin` | user | Pin / unpin (archiving also unpins) |
 | PUT | `/chats/:id/archive` · `/unarchive` | user | Archive / restore |
 | DELETE | `/chats/archived/all` | user | Delete all archived |
 | GET | `/chats/:id/export` | user | Export as JSON |
@@ -154,7 +157,7 @@ All routes are prefixed with `/api`. Authenticated routes expect `Authorization:
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | GET | `/settings` | — | Global appearance settings |
-| PUT | `/settings` | — | Save appearance settings |
+| PUT | `/settings` | admin | Save appearance settings |
 
 ---
 
@@ -182,7 +185,8 @@ All routes are prefixed with `/api`. Authenticated routes expect `Authorization:
 | Collection | Purpose |
 |------------|----------|
 | `users` | `{id, name, email, password_hash, role, created_at}` — unique index on `email` |
-| `chats` | `{id, title, model, user_id, archived, created_at}` |
+| `chats` | `{id, title, model, user_id, archived, pinned, created_at}` |
+| `login_attempts` | `{identifier, count, locked_until}` — brute-force lockout |
 | `messages` | `{id, chat_id, role, content, timestamp}` |
 | `connections` | Provider API keys / base URLs, default model, enabled models |
 | `app_settings` | Theme, logo, font size, system prompt |
