@@ -318,6 +318,7 @@ async def admin_delete_user(user_id: str, admin=Depends(get_admin_user)):
     if chat_ids:
         await db.messages.delete_many({"chat_id": {"$in": chat_ids}})
     await db.chats.delete_many({"user_id": user_id})
+    await db.folders.delete_many({"user_id": user_id})
     return {"status": "ok"}
 
 

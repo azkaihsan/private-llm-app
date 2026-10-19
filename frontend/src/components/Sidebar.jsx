@@ -232,6 +232,7 @@ const Sidebar = ({
             <Search size={20} />
           </button>
           <button
+            data-testid="sidebar-new-chat-button"
             onClick={onNewChat}
             className="p-2 rounded-lg hover:bg-white/5 text-neutral-400 hover:text-white transition-colors"
             title="New Chat"

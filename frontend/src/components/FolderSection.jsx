@@ -89,7 +89,7 @@ const FolderSection = ({ folder, count, collapsed, onToggle, onRename, onEditSet
       {!collapsed && (
         <div data-testid={`folder-chats-${folder.id}`} className="pl-4 ml-2.5 border-l border-white/5" style={folder.color ? { borderColor: `${folder.color}59` } : undefined}>
           {children}
-          {count === 0 && <div className="px-3 py-1.5 text-[11px] text-neutral-600 italic">Drag chats here</div>}
+          {count === 0 && <div className="px-3 py-1.5 text-[11px] text-neutral-500 italic">Drag chats here</div>}
         </div>
       )}
     </div>

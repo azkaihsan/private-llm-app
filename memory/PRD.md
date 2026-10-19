@@ -264,6 +264,8 @@ A self-hosted, multi-model AI chat interface inspired by Open WebUI. The product
 
 - 2026-06: **Folder Colours & Icons** — `color` (whitelist of 10 hex + default) and `icon` (16 keys) on folders, validated server-side (422 otherwise). Picked in Folder settings dialog (`folder-color-{hex}`, `folder-icon-{key}`); folder icon tinted + coloured left line beside its chats; also tinted in "Move to folder" submenu. Shared map in `components/folderStyles.js`. Self-tested: curl + Playwright.
 
+- 2026-06: **Folder Reordering** — drag folder headers (before/after blue indicator; disabled during search); `position` field, `PUT /api/folders/order {ids}` (must list all own folders once, else 400); new folders appended at bottom. Admin user delete now also removes their folders. Tested: iteration 7 — backend 47/47, frontend 100% (covers Instructions, New Chat in Folder, Colours/Icons, Reordering).
+
 ### 10. Backlog
 - P1: Polish Admin Panel to match Open WebUI look (table layout, last-active column)
 - P2: Streaming responses, file upload, mobile layout, admin signup toggle, replace window.confirm/alert with in-app dialogs

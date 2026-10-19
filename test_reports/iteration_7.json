@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 7 tested four folder features: Instructions, New Chat in Folder, Colours/Icons and Reordering, plus a regression of iteration 6. Backend: 47/47 pytest pass (31 new tests in test_iter7_folder_features.py plus 16 from iteration 6). They cover the instructions/colour/icon whitelists (case-insensitive colour, invalid values and instructions over 4000 characters return 422 on both POST and PUT), a name-only PUT keeping the other fields, clearing fields with '', another user's folder returning 404, POST /chats with folder_id (unknown or foreign folder returns 404), PUT /folders/order (missing, duplicate, unknown or foreign ids return 400, and the new order persists in GET), new folders landing at the bottom even after a delete, and the LLM: a folder chat replies BANANA while an unfiled chat replies Paris. Frontend (Playwright, desktop) all passes. The settings dialog edits name, colour, icon and instructions; the 'Folder saved' toast, amber indicator, red rocket icon and border-left rgba(239,68,68,0.35) all appear and persist after reload. folder-new-chat expands a collapsed folder, shows the 'New chat in Alpha Proj' badge, and the first message creates the chat in the folder and clears the badge (GPT-4o replied BANANA through the UI). pending-folder-clear makes the chat unfiled; a normal new chat or selecting another chat clears the badge. Folder reorder by drag works before and after and persists after reload; the drop indicator before/after shows correctly (checked with synthetic DragEvents) and not on the folder being dragged. Dragging a chat into a folder and out to unfiled still works. Headers are not draggable while searching. Regression of create (appended at bottom), Move menu, pin/unpin, inline rename (keeps instructions), delete with confirm, and collapse persistence all pass.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "DELETE /api/admin/users/{id}", "issue": "Doesn't delete the user's folders (db.folders), so orphaned folder docs are left behind. The testing agent found 35 orphans left by earlier test users and deleted them. Fix: add `await db.folders.delete_many({'user_id': user_id})`."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Sidebar folders", "issues": ["The 'Drag chats here' placeholder (text-neutral-600, italic, 11px) has very low contrast on the dark sidebar. Consider neutral-500."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iter7_folder_features.py", "/app/backend/tests/test_iter6_folders.py", "/app/test_reports/pytest/pytest_iter7.xml"],
+  "action_items": [
+    "Delete the user's folders in admin_delete_user (server.py ~line 320)"
+  ],
+  "critical_code_review_comments": [
+    "send_message passes the system prompt both as system_message and as the first entry in initial_messages to LlmChat. This existed before this iteration, but the system prompt (now including the folder instructions) may be sent twice. Verify and pass it only once.",
+    "list_folders sorts by position, and legacy folders created before iteration 7 have no position field. Mongo sorts missing/null first, so they jump to the top, and next_folder_position only counts numbered docs. Low impact: the first reorder normalizes everything. A one-time migration that sets position on startup would make it deterministic.",
+    "reorderFolder in useFolders relies on the setFolders updater running synchronously to fill `next`. That works in React 18 event handlers but is fragile. Compute it from the current folders instead.",
+    "The rename_folder duplicate check runs before the existence/ownership check, so a foreign id can return 409 instead of 404 (carried over from iteration 6, harmless)."
+  ],
+  "updated_files": ["/app/frontend/src/components/Sidebar.jsx (added data-testid='sidebar-new-chat-button' to the New Chat icon button)", "/app/backend/tests/test_iter7_folder_features.py"],
+  "success_rate": {"backend": "100% (47/47)", "frontend": "100%"},
+  "seed_data_creation": "Temporary users test_f7_* and test_ui7_* were created and then deleted via the admin API. Their orphaned folders were removed directly from Mongo.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Use test_iter7_folder_features.py for folder-feature regression; the LLM test needs the Emergent key with gpt-4o. In Playwright, a manual mouse.down/move doesn't fire dragover until mouse.up, so check the drop indicators by dispatching synthetic DragEvents with a shared DataTransfer (dragstart on the source header, dragover on the target header at clientY top+3 for 'before' or top+30 for 'after'). locator.drag_to with target_position y=30 gives 'after'. The New Chat button is now sidebar-new-chat-button. The chat input is the first textarea."
+}
