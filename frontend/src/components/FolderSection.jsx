@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronRight, Folder, FolderOpen, Pencil, Trash2, ScrollText, SlidersHorizontal } from 'lucide-react';
+import { ChevronRight, Folder, FolderOpen, Pencil, Trash2, ScrollText, SlidersHorizontal, Plus } from 'lucide-react';
 
 export const useDropZone = (onDropChat) => {
   const [over, setOver] = useState(false);
@@ -13,7 +13,7 @@ export const useDropZone = (onDropChat) => {
   };
 };
 
-const FolderSection = ({ folder, count, collapsed, onToggle, onRename, onEditSettings, onDelete, onDropChat, children }) => {
+const FolderSection = ({ folder, count, collapsed, onToggle, onRename, onEditSettings, onDelete, onDropChat, onNewChat, isPending, children }) => {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(folder.name);
   const drop = useDropZone(onDropChat);
@@ -29,7 +29,7 @@ const FolderSection = ({ folder, count, collapsed, onToggle, onRename, onEditSet
     <div data-testid={`folder-${folder.id}`} {...drop.props}
       className={`rounded-lg mb-0.5 transition-colors ${drop.over ? 'bg-white/[0.07] ring-1 ring-white/20' : ''}`}>
       <div data-testid={`folder-header-${folder.id}`} onClick={() => !editing && onToggle(folder.id)}
-        className="group flex items-center gap-1.5 px-2 py-2 rounded-lg cursor-pointer hover:bg-white/5 text-neutral-300">
+        className={`group flex items-center gap-1.5 px-2 py-2 rounded-lg cursor-pointer hover:bg-white/5 text-neutral-300 ${isPending ? 'bg-white/[0.06]' : ''}`}>
         <ChevronRight size={13} className={`shrink-0 text-neutral-500 transition-transform duration-200 ${collapsed ? '' : 'rotate-90'}`} />
         {collapsed ? <Folder size={15} className="shrink-0" /> : <FolderOpen size={15} className="shrink-0" />}
         {editing ? (
@@ -48,6 +48,8 @@ const FolderSection = ({ folder, count, collapsed, onToggle, onRename, onEditSet
         {!editing && <span data-testid={`folder-count-${folder.id}`} className="text-[11px] text-neutral-500 group-hover:hidden">{count}</span>}
         {!editing && (
           <div className="hidden group-hover:flex items-center gap-0.5">
+            <button data-testid={`folder-new-chat-${folder.id}`} title="New chat in folder" onClick={e => { e.stopPropagation(); onNewChat(folder.id); }}
+              className="p-1 rounded text-neutral-400 hover:text-white hover:bg-white/10"><Plus size={12} /></button>
             <button data-testid={`folder-edit-instructions-${folder.id}`} title="Edit instructions" onClick={e => { e.stopPropagation(); onEditSettings(folder.id); }}
               className="p-1 rounded text-neutral-400 hover:text-white hover:bg-white/10"><SlidersHorizontal size={12} /></button>
             <button data-testid={`folder-rename-${folder.id}`} title="Rename folder" onClick={e => { e.stopPropagation(); setName(folder.name); setEditing(true); }}

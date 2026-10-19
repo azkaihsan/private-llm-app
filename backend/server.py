@@ -396,6 +396,7 @@ MAX_LOGO_BYTES = 700 * 1024
 class ChatCreate(BaseModel):
     title: str = Field(default="", max_length=200)
     model: str = Field(default="gpt-4o", min_length=1, max_length=200)
+    folder_id: Optional[str] = Field(default=None, max_length=64)
 
 
 class ChatUpdate(BaseModel):
@@ -524,7 +525,9 @@ async def get_chats(user=Depends(get_current_user)):
 
 @api_router.post("/chats")
 async def create_chat(data: ChatCreate, user=Depends(get_current_user)):
-    chat = {"id": str(uuid.uuid4()), "title": data.title.strip() or "New Chat", "model": data.model, "user_id": user["id"], "created_at": now_iso(), "archived": False, "pinned": False, "folder_id": None}
+    if data.folder_id and not await db.folders.find_one({"id": data.folder_id, "user_id": user["id"]}, {"_id": 1}):
+        raise HTTPException(status_code=404, detail="Folder not found")
+    chat = {"id": str(uuid.uuid4()), "title": data.title.strip() or "New Chat", "model": data.model, "user_id": user["id"], "created_at": now_iso(), "archived": False, "pinned": False, "folder_id": data.folder_id or None}
     await db.chats.insert_one({**chat, "_id": chat["id"]})
     return chat
 

@@ -260,6 +260,8 @@ A self-hosted, multi-model AI chat interface inspired by Open WebUI. The product
 
 - 2026-06: **Folder Instructions** — per-folder `instructions` (≤4000 chars) on `POST/PUT /api/folders`; when sending a message in a folder chat, backend appends `"Project instructions:\n…"` after the global system prompt. UI: hover folder → `folder-edit-instructions-{id}` opens `FolderSettingsDialog` (name + instructions, char counter, toast on save); amber ScrollText indicator on folders with instructions. Self-tested: curl (LLM obeyed folder instruction) + Playwright screenshot.
 
+- 2026-06: **New Chat in Folder** — hover folder → `folder-new-chat-{id}` (+) opens a fresh chat screen with `pending-folder-badge` ("New chat in <Folder>", X to cancel); chat is created inside the folder on first message (`POST /api/chats` accepts `folder_id`, 404 if not owned). Collapsed folder auto-expands. Self-tested: curl + Playwright.
+
 ### 10. Backlog
 - P1: Polish Admin Panel to match Open WebUI look (table layout, last-active column)
 - P2: Streaming responses, file upload, mobile layout, admin signup toggle, replace window.confirm/alert with in-app dialogs

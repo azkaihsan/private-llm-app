@@ -12,7 +12,7 @@ import CommandPalette, { paletteIcons } from "@/components/CommandPalette";
 import { SettingsProvider, useSettings } from "@/context/SettingsContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { suggestions } from "@/data/mockData";
-import { PanelLeft, SquarePen, ChevronDown, Check, Search, Loader2 } from "lucide-react";
+import { PanelLeft, SquarePen, ChevronDown, Check, Search, Loader2, FolderOpen, X } from "lucide-react";
 import axios from "axios";
 import { Toaster } from "sonner";
 import { useFolders } from "@/hooks/useFolders";
@@ -26,6 +26,8 @@ function AppContent() {
   const [chats, setChats] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
   const folderApi = useFolders(user?.id, setChats);
+  const [pendingFolderId, setPendingFolderId] = useState(null);
+  const pendingFolder = folderApi.folders.find(f => f.id === pendingFolderId);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selectedModel, setSelectedModel] = useState(null);
   const [models, setModels] = useState([]);
@@ -157,9 +159,16 @@ function AppContent() {
     setActiveChatId(null);
     setActiveMessages([]);
     setIsTyping(false);
+    setPendingFolderId(null);
   }, []);
 
+  const startChatInFolder = useCallback((folderId) => {
+    createNewChat();
+    setPendingFolderId(folderId);
+  }, [createNewChat]);
+
   const selectChat = useCallback((chatId) => {
+    setPendingFolderId(null);
     setActiveChatId(chatId);
     setIsTyping(false);
   }, []);
@@ -266,7 +275,8 @@ function AppContent() {
       // Create new chat first
       try {
         const title = content.length > 50 ? content.slice(0, 50) + "..." : content;
-        const res = await axios.post(`${API}/chats`, { title, model: modelId });
+        const res = await axios.post(`${API}/chats`, { title, model: modelId, folder_id: pendingFolder?.id || null });
+        setPendingFolderId(null);
         const newChat = { ...res.data, createdAt: new Date(res.data.created_at).getTime() };
         setChats(prev => [newChat, ...prev]);
         skipFetchRef.current = newChat.id;
@@ -309,7 +319,7 @@ function AppContent() {
         setActiveMessages(prev => [...prev, { id: `err-${Date.now()}`, role: "assistant", content: "Failed to send message. Please try again." }]);
       }
     }
-  }, [activeChatId, selectedModel, isTyping]);
+  }, [activeChatId, selectedModel, isTyping, pendingFolder]);
 
   const handleSuggestionClick = useCallback((suggestion) => {
     sendMessage(`${suggestion.title} ${suggestion.subtitle}`);
@@ -350,6 +360,8 @@ function AppContent() {
         onUpdateFolder={folderApi.updateFolder}
         onDeleteFolder={folderApi.deleteFolder}
         onMoveChat={folderApi.moveChat}
+        onNewChatInFolder={startChatInFolder}
+        pendingFolderId={pendingFolder?.id || null}
       />
 
       <div className="flex-1 flex flex-col min-w-0 relative">
@@ -412,6 +424,15 @@ function AppContent() {
                   </div>
                 </>
               )}
+            </div>
+          )}
+
+          {!activeChatId && pendingFolder && (
+            <div data-testid="pending-folder-badge" className="flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-full bg-white/[0.06] border border-white/10 text-xs text-neutral-300">
+              <FolderOpen size={13} className="text-neutral-400" />
+              <span>New chat in <span data-testid="pending-folder-name" className="font-medium text-white">{pendingFolder.name}</span></span>
+              <button data-testid="pending-folder-clear" title="Don't add to folder" onClick={() => setPendingFolderId(null)}
+                className="p-0.5 rounded-full text-neutral-500 hover:text-white hover:bg-white/10 transition-colors"><X size={12} /></button>
             </div>
           )}
 

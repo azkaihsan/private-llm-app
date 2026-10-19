@@ -19,7 +19,7 @@ const Sidebar = ({
   onRenameChat, isOpen, onToggle, onOpenSettings, onOpenUserManagement, onOpenPalette, archivedRequest,
   onArchiveChat, onExportChat, onImportChat, onPinChat, onUnpinChat,
   archivedChats, onUnarchiveChat, onDeleteArchivedChat, onDeleteAllArchived, onRefreshArchived,
-  folders, onCreateFolder, onRenameFolder, onUpdateFolder, onDeleteFolder, onMoveChat
+  folders, onCreateFolder, onRenameFolder, onUpdateFolder, onDeleteFolder, onMoveChat, onNewChatInFolder, pendingFolderId
 }) => {
   const { user, isAdmin, logout } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
@@ -84,6 +84,11 @@ const Sidebar = ({
     localStorage.setItem(collapseKey, JSON.stringify(next));
     return next;
   });
+
+  const newChatInFolder = (id) => {
+    if (collapsedFolders.includes(id)) toggleFolder(id);
+    onNewChatInFolder(id);
+  };
 
   const submitNewFolder = async () => {
     const name = newFolderName.trim();
@@ -295,7 +300,8 @@ const Sidebar = ({
               return (
                 <FolderSection key={f.id} folder={f} count={items.length}
                   collapsed={!searching && collapsedFolders.includes(f.id)} onToggle={toggleFolder}
-                  onRename={onRenameFolder} onEditSettings={setSettingsFolderId} onDelete={onDeleteFolder} onDropChat={id => onMoveChat(id, f.id)}>
+                  onRename={onRenameFolder} onEditSettings={setSettingsFolderId} onDelete={onDeleteFolder}
+                  onNewChat={newChatInFolder} isPending={pendingFolderId === f.id} onDropChat={id => onMoveChat(id, f.id)}>
                   {items.map(renderChat)}
                 </FolderSection>
               );
