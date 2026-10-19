@@ -149,6 +149,8 @@ async def lifespan(_app: FastAPI):
     await db.chats.create_index("id", unique=True)
     await db.messages.create_index([("chat_id", 1), ("timestamp", 1)])
     await db.login_attempts.create_index("identifier", unique=True)
+    await db.folders.create_index("id", unique=True)
+    await db.folders.create_index([("user_id", 1), ("created_at", 1)])
 
     admin_email = os.environ["ADMIN_EMAIL"].strip().lower()
     admin_password = os.environ["ADMIN_PASSWORD"]
@@ -522,7 +524,7 @@ async def get_chats(user=Depends(get_current_user)):
 
 @api_router.post("/chats")
 async def create_chat(data: ChatCreate, user=Depends(get_current_user)):
-    chat = {"id": str(uuid.uuid4()), "title": data.title.strip() or "New Chat", "model": data.model, "user_id": user["id"], "created_at": now_iso(), "archived": False, "pinned": False}
+    chat = {"id": str(uuid.uuid4()), "title": data.title.strip() or "New Chat", "model": data.model, "user_id": user["id"], "created_at": now_iso(), "archived": False, "pinned": False, "folder_id": None}
     await db.chats.insert_one({**chat, "_id": chat["id"]})
     return chat
 
@@ -608,6 +610,75 @@ async def archive_chat(chat_id: str, user=Depends(get_current_user)):
 @api_router.put("/chats/{chat_id}/unarchive")
 async def unarchive_chat(chat_id: str, user=Depends(get_current_user)):
     return await set_chat_flag(chat_id, user["id"], {"archived": False})
+
+
+class ChatFolderMove(BaseModel):
+    folder_id: Optional[str] = Field(default=None, max_length=64)
+
+
+@api_router.put("/chats/{chat_id}/folder")
+async def move_chat_to_folder(chat_id: str, data: ChatFolderMove, user=Depends(get_current_user)):
+    if data.folder_id and not await db.folders.find_one({"id": data.folder_id, "user_id": user["id"]}, {"_id": 1}):
+        raise HTTPException(status_code=404, detail="Folder not found")
+    return await set_chat_flag(chat_id, user["id"], {"folder_id": data.folder_id or None})
+
+
+# ===== Folder Endpoints =====
+
+MAX_FOLDERS = 200
+
+
+class FolderPayload(BaseModel):
+    name: str = Field(min_length=1, max_length=60)
+
+    @field_validator("name")
+    @classmethod
+    def strip_name(cls, v):
+        v = " ".join(v.split())
+        if not v:
+            raise ValueError("Folder name cannot be empty")
+        return v
+
+
+async def ensure_unique_folder_name(user_id: str, name: str, exclude_id: Optional[str] = None):
+    query = {"user_id": user_id, "name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}}
+    if exclude_id:
+        query["id"] = {"$ne": exclude_id}
+    if await db.folders.find_one(query, {"_id": 1}):
+        raise HTTPException(status_code=409, detail="A folder with this name already exists")
+
+
+@api_router.get("/folders")
+async def list_folders(user=Depends(get_current_user)):
+    return await db.folders.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", 1).to_list(MAX_FOLDERS)
+
+
+@api_router.post("/folders")
+async def create_folder(data: FolderPayload, user=Depends(get_current_user)):
+    if await db.folders.count_documents({"user_id": user["id"]}) >= MAX_FOLDERS:
+        raise HTTPException(status_code=400, detail=f"Folder limit of {MAX_FOLDERS} reached")
+    await ensure_unique_folder_name(user["id"], data.name)
+    folder = {"id": str(uuid.uuid4()), "name": data.name, "user_id": user["id"], "created_at": now_iso()}
+    await db.folders.insert_one({**folder, "_id": folder["id"]})
+    return folder
+
+
+@api_router.put("/folders/{folder_id}")
+async def rename_folder(folder_id: str, data: FolderPayload, user=Depends(get_current_user)):
+    await ensure_unique_folder_name(user["id"], data.name, folder_id)
+    result = await db.folders.update_one({"id": folder_id, "user_id": user["id"]}, {"$set": {"name": data.name}})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Folder not found")
+    return {"status": "ok"}
+
+
+@api_router.delete("/folders/{folder_id}")
+async def delete_folder(folder_id: str, user=Depends(get_current_user)):
+    result = await db.folders.delete_one({"id": folder_id, "user_id": user["id"]})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Folder not found")
+    moved = await db.chats.update_many({"user_id": user["id"], "folder_id": folder_id}, {"$set": {"folder_id": None}})
+    return {"status": "ok", "moved_chats": moved.modified_count}
 
 
 @api_router.post("/chats/{chat_id}/messages")
@@ -700,7 +771,7 @@ async def import_chat(data: ChatImport, user=Depends(get_current_user)):
     title = str(data.chat.get("title") or "Imported Chat").strip()[:200] or "Imported Chat"
     model = str(data.chat.get("model") or "gpt-4o")[:200]
     new_chat_id = str(uuid.uuid4())
-    chat_data = {"id": new_chat_id, "title": title, "model": model, "user_id": user["id"], "created_at": now_iso(), "archived": False, "pinned": False}
+    chat_data = {"id": new_chat_id, "title": title, "model": model, "user_id": user["id"], "created_at": now_iso(), "archived": False, "pinned": False, "folder_id": None}
     await db.chats.insert_one({**chat_data, "_id": new_chat_id})
     docs = []
     for i, msg in enumerate(data.messages):

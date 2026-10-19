@@ -1,13 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import {
-  Plus, Search, MessageSquare, Pencil, Trash2,
+  Search, Trash2,
   PanelLeft, Folder, Settings, LogOut, CircleUser,
-  SquarePen, EllipsisVertical, X, Archive, ChevronDown,
-  Download, Upload, ArchiveRestore, MoreHorizontal, ArrowLeft, Shield, Pin, PinOff
+  SquarePen, EllipsisVertical, X, Archive,
+  Upload, ArchiveRestore, ArrowLeft, Shield, Pin, FolderPlus
 } from 'lucide-react';
 import { useSettings } from '@/context/SettingsContext';
 import { useAuth } from '@/context/AuthContext';
+import ChatRow from '@/components/ChatRow';
+import FolderSection, { useDropZone } from '@/components/FolderSection';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -15,16 +17,21 @@ const Sidebar = ({
   chats, activeChatId, onSelectChat, onNewChat, onDeleteChat,
   onRenameChat, isOpen, onToggle, onOpenSettings, onOpenUserManagement, onOpenPalette, archivedRequest,
   onArchiveChat, onExportChat, onImportChat, onPinChat, onUnpinChat,
-  archivedChats, onUnarchiveChat, onDeleteArchivedChat, onDeleteAllArchived, onRefreshArchived
+  archivedChats, onUnarchiveChat, onDeleteArchivedChat, onDeleteAllArchived, onRefreshArchived,
+  folders, onCreateFolder, onRenameFolder, onDeleteFolder, onMoveChat
 }) => {
   const { user, isAdmin, logout } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
-  const [editingChatId, setEditingChatId] = useState(null);
-  const [editTitle, setEditTitle] = useState('');
-  const [hoveredChatId, setHoveredChatId] = useState(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [contextMenuChat, setContextMenuChat] = useState(null);
+  const [creatingFolder, setCreatingFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [draggingChatId, setDraggingChatId] = useState(null);
+  const collapseKey = `openwebui_collapsed_folders_${user?.id}`;
+  const [collapsedFolders, setCollapsedFolders] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(collapseKey)) || []; } catch { return []; }
+  });
+  const unfiledDrop = useDropZone(id => onMoveChat(id, null));
   const [showArchived, setShowArchived] = useState(false);
   const { settings } = useSettings();
   const fileInputRef = useRef(null);
@@ -60,23 +67,49 @@ const Sidebar = ({
   const filteredChats = chats.filter(c =>
     c.title.toLowerCase().includes(searchQuery.toLowerCase()) || contentMatches[c.id]
   );
+  const searching = searchQuery.trim().length > 0;
+  const folderIds = new Set(folders.map(f => f.id));
   const pinnedChats = filteredChats.filter(c => c.pinned);
-  const groupedChats = [
-    ...(pinnedChats.length ? [['Pinned', pinnedChats]] : []),
-    ...groupChatsByDate(filteredChats.filter(c => !c.pinned)),
-  ];
+  const folderChats = {};
+  filteredChats.forEach(c => {
+    if (!c.pinned && folderIds.has(c.folder_id)) (folderChats[c.folder_id] = folderChats[c.folder_id] || []).push(c);
+  });
+  const visibleFolders = searching ? folders.filter(f => folderChats[f.id]?.length) : folders;
+  const dateGroups = groupChatsByDate(filteredChats.filter(c => !c.pinned && !folderIds.has(c.folder_id)));
 
-  const handleStartRename = (e, chat) => {
-    e.stopPropagation();
-    setEditingChatId(chat.id);
-    setEditTitle(chat.title);
-    setContextMenuChat(null);
+  const toggleFolder = (id) => setCollapsedFolders(prev => {
+    const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
+    localStorage.setItem(collapseKey, JSON.stringify(next));
+    return next;
+  });
+
+  const submitNewFolder = async () => {
+    const name = newFolderName.trim();
+    setCreatingFolder(false);
+    setNewFolderName('');
+    if (name) await onCreateFolder(name);
   };
 
-  const handleFinishRename = (chatId) => {
-    if (editTitle.trim()) onRenameChat(chatId, editTitle.trim());
-    setEditingChatId(null);
+  const rowActions = {
+    onSelect: onSelectChat, onRename: onRenameChat, onPin: onPinChat, onUnpin: onUnpinChat,
+    onExport: id => onExportChat && onExportChat(id), onArchive: id => onArchiveChat && onArchiveChat(id),
+    onDelete: onDeleteChat, onMove: onMoveChat,
   };
+
+  const renderChat = (chat) => (
+    <ChatRow key={chat.id} chat={chat} isActive={activeChatId === chat.id} folders={folders} actions={rowActions}
+      snippet={searchQuery && contentMatches[chat.id]?.snippet}
+      onDragStart={setDraggingChatId} onDragEnd={() => setDraggingChatId(null)} />
+  );
+
+  const renderGroup = (group, items) => (
+    <div key={group} className="mb-1">
+      <div data-testid={`chat-group-${group.toLowerCase().replace(/\s+/g, '-')}`} className="px-2 py-2 text-[11px] font-medium text-neutral-500 uppercase tracking-wider flex items-center gap-1.5">
+        {group === 'Pinned' && <Pin size={11} />}{group}
+      </div>
+      {items.map(renderChat)}
+    </div>
+  );
 
   const handleImportFile = (e) => {
     const file = e.target.files?.[0];
@@ -241,129 +274,42 @@ const Sidebar = ({
       {/* Chat List */}
       <div className="flex-1 overflow-y-auto px-2 custom-scrollbar">
         <div className="pb-2">
-          {groupedChats.map(([group, items]) => (
-            <div key={group} className="mb-1">
-              <div data-testid={`chat-group-${group.toLowerCase().replace(/\s+/g, '-')}`} className="px-2 py-2 text-[11px] font-medium text-neutral-500 uppercase tracking-wider flex items-center gap-1.5">
-                {group === 'Pinned' && <Pin size={11} />}{group}
-              </div>
-              {items.map(chat => {
-                const isActive = activeChatId === chat.id;
-                const isHovered = hoveredChatId === chat.id;
-                const isMenuOpen = contextMenuChat === chat.id;
-                const showActions = isActive || isHovered || isMenuOpen;
+          {pinnedChats.length > 0 && renderGroup('Pinned', pinnedChats)}
 
-                return (
-                <div
-                  key={chat.id}
-                  data-testid={`chat-row-${chat.id}`}
-                  className={`group relative rounded-lg cursor-pointer mb-0.5 transition-colors ${
-                    isActive ? 'bg-[#212121]' : 'hover:bg-white/5'
-                  }`}
-                  onClick={() => onSelectChat(chat.id)}
-                  onMouseEnter={() => setHoveredChatId(chat.id)}
-                  onMouseLeave={() => { if (!isMenuOpen) setHoveredChatId(null); }}
-                >
-                  {editingChatId === chat.id ? (
-                    <input
-                      type="text"
-                      value={editTitle}
-                      onChange={e => setEditTitle(e.target.value)}
-                      onBlur={() => handleFinishRename(chat.id)}
-                      onKeyDown={e => { if (e.key === 'Enter') handleFinishRename(chat.id); if (e.key === 'Escape') setEditingChatId(null); }}
-                      className="w-full bg-transparent text-white text-sm py-2 px-3 outline-none"
-                      autoFocus
-                      onClick={e => e.stopPropagation()}
-                    />
-                  ) : (
-                    <div className="flex items-center">
-                      <div className="flex-1 min-w-0 py-2 px-3">
-                        <span data-testid={`chat-item-${chat.id}`} className="block text-sm text-neutral-200 truncate">{chat.title}</span>
-                        {searchQuery && contentMatches[chat.id] && (
-                          <span data-testid={`chat-snippet-${chat.id}`} className="block text-[11px] text-neutral-500 truncate mt-0.5">
-                            {contentMatches[chat.id].snippet}
-                          </span>
-                        )}
-                      </div>
-                      {showActions && (
-                        <button
-                          data-testid={`chat-pin-toggle-${chat.id}`}
-                          title={chat.pinned ? 'Unpin' : 'Pin'}
-                          onClick={e => { e.stopPropagation(); chat.pinned ? onUnpinChat(chat.id) : onPinChat(chat.id); }}
-                          className="shrink-0 p-1.5 rounded-md text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
-                        >
-                          {chat.pinned ? <PinOff size={14} /> : <Pin size={14} />}
-                        </button>
-                      )}
-                      {showActions && (
-                        <button
-                          data-testid={`chat-menu-${chat.id}`}
-                          onClick={e => { e.stopPropagation(); setContextMenuChat(isMenuOpen ? null : chat.id); }}
-                          className="shrink-0 p-1.5 mr-1 rounded-md text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
-                        >
-                          <MoreHorizontal size={16} />
-                        </button>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Context Menu - fixed positioned */}
-                  {isMenuOpen && (
-                    <>
-                      <div className="fixed inset-0 z-[100]" onClick={(e) => { e.stopPropagation(); setContextMenuChat(null); }} />
-
-                      <div className="fixed z-[101] w-48 bg-[#2f2f2f] rounded-xl shadow-2xl border border-white/10 overflow-hidden"
-                        style={{ left: '16px', top: 'auto', marginTop: '-5px' }}
-                        ref={el => {
-                          if (el) {
-                            const chatRow = el.closest('[class*="group relative"]');
-                            if (chatRow) {
-                              const rect = chatRow.getBoundingClientRect();
-                              el.style.top = `${rect.bottom + 4}px`;
-                              el.style.left = `${rect.left}px`;
-                            }
-                          }
-                        }}
-                        onClick={e => e.stopPropagation()}>
-                        <button
-                          onClick={() => { handleStartRename({ stopPropagation: () => {} }, chat); }}
-                          className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-neutral-300 text-sm"
-                        >
-                          <Pencil size={14} /> Rename
-                        </button>
-                        <button
-                          data-testid={`chat-menu-pin-${chat.id}`}
-                          onClick={() => { chat.pinned ? onUnpinChat(chat.id) : onPinChat(chat.id); setContextMenuChat(null); }}
-                          className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-neutral-300 text-sm"
-                        >
-                          {chat.pinned ? <><PinOff size={14} /> Unpin</> : <><Pin size={14} /> Pin</>}
-                        </button>
-                        <button
-                          onClick={() => { onExportChat && onExportChat(chat.id); setContextMenuChat(null); }}
-                          className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-neutral-300 text-sm"
-                        >
-                          <Download size={14} /> Export Chat
-                        </button>
-                        <button
-                          onClick={() => { onArchiveChat && onArchiveChat(chat.id); setContextMenuChat(null); }}
-                          className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-neutral-300 text-sm"
-                        >
-                          <Archive size={14} /> Archive
-                        </button>
-                        <div className="border-t border-white/10" />
-                        <button
-                          onClick={() => { if (window.confirm('Delete this chat?')) { onDeleteChat(chat.id); setContextMenuChat(null); } }}
-                          className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-red-400 text-sm"
-                        >
-                          <Trash2 size={14} /> Delete
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-                );
-              })}
+          <div className="mb-1" data-testid="folders-section">
+            <div className="px-2 py-2 text-[11px] font-medium text-neutral-500 uppercase tracking-wider flex items-center gap-1.5">
+              <Folder size={11} /><span className="flex-1">Folders</span>
+              <button data-testid="new-folder-button" title="New folder" onClick={() => setCreatingFolder(true)}
+                className="p-0.5 rounded text-neutral-500 hover:text-white hover:bg-white/10 transition-colors"><FolderPlus size={13} /></button>
             </div>
-          ))}
+            {creatingFolder && (
+              <input data-testid="new-folder-input" autoFocus maxLength={60} value={newFolderName} placeholder="Folder name"
+                onChange={e => setNewFolderName(e.target.value)} onBlur={submitNewFolder}
+                onKeyDown={e => { if (e.key === 'Enter') submitNewFolder(); if (e.key === 'Escape') { setNewFolderName(''); setCreatingFolder(false); } }}
+                className="w-full mb-1 bg-[#2f2f2f] text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-1 focus:ring-neutral-600 placeholder:text-neutral-500" />
+            )}
+            {visibleFolders.map(f => {
+              const items = folderChats[f.id] || [];
+              return (
+                <FolderSection key={f.id} folder={f} count={items.length}
+                  collapsed={!searching && collapsedFolders.includes(f.id)} onToggle={toggleFolder}
+                  onRename={onRenameFolder} onDelete={onDeleteFolder} onDropChat={id => onMoveChat(id, f.id)}>
+                  {items.map(renderChat)}
+                </FolderSection>
+              );
+            })}
+            {folders.length === 0 && !creatingFolder && (
+              <div data-testid="folders-empty" className="px-3 py-1 text-[11px] text-neutral-600">Create a folder, then drag chats into it</div>
+            )}
+          </div>
+
+          <div data-testid="unfiled-drop-zone" {...unfiledDrop.props}
+            className={`rounded-lg transition-colors ${unfiledDrop.over ? 'bg-white/[0.07] ring-1 ring-white/20' : ''}`}>
+            {draggingChatId && dateGroups.length === 0 && (
+              <div className="px-3 py-3 text-[11px] text-neutral-500 text-center border border-dashed border-white/10 rounded-lg">Drop here to remove from folder</div>
+            )}
+            {dateGroups.map(([group, items]) => renderGroup(group, items))}
+          </div>
           {filteredChats.length === 0 && (
             <div className="text-center text-neutral-500 text-sm py-8">No chats found</div>
           )}

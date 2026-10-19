@@ -14,6 +14,8 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { suggestions } from "@/data/mockData";
 import { PanelLeft, SquarePen, ChevronDown, Check, Search, Loader2 } from "lucide-react";
 import axios from "axios";
+import { Toaster } from "sonner";
+import { useFolders } from "@/hooks/useFolders";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -23,6 +25,7 @@ function AppContent() {
   const { user, isAdmin } = useAuth();
   const [chats, setChats] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
+  const folderApi = useFolders(user?.id, setChats);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selectedModel, setSelectedModel] = useState(null);
   const [models, setModels] = useState([]);
@@ -341,6 +344,11 @@ function AppContent() {
         onDeleteArchivedChat={deleteArchivedChat}
         onDeleteAllArchived={deleteAllArchived}
         onRefreshArchived={fetchArchivedChats}
+        folders={folderApi.folders}
+        onCreateFolder={folderApi.createFolder}
+        onRenameFolder={folderApi.renameFolder}
+        onDeleteFolder={folderApi.deleteFolder}
+        onMoveChat={folderApi.moveChat}
       />
 
       <div className="flex-1 flex flex-col min-w-0 relative">
@@ -460,6 +468,7 @@ function AppContent() {
         onSelectChat={selectChat}
         onJumpToMessage={jumpToMessage}
       />
+      <Toaster theme="dark" position="bottom-right" richColors />
     </div>
   );
 }
