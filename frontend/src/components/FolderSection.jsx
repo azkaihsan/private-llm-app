@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { ChevronRight, Folder, FolderOpen, Pencil, Trash2, ScrollText, SlidersHorizontal, Plus } from 'lucide-react';
+import { folderIcon } from '@/components/folderStyles';
+import { ChevronRight, Pencil, Trash2, ScrollText, SlidersHorizontal, Plus } from 'lucide-react';
 
 export const useDropZone = (onDropChat) => {
   const [over, setOver] = useState(false);
@@ -31,7 +32,7 @@ const FolderSection = ({ folder, count, collapsed, onToggle, onRename, onEditSet
       <div data-testid={`folder-header-${folder.id}`} onClick={() => !editing && onToggle(folder.id)}
         className={`group flex items-center gap-1.5 px-2 py-2 rounded-lg cursor-pointer hover:bg-white/5 text-neutral-300 ${isPending ? 'bg-white/[0.06]' : ''}`}>
         <ChevronRight size={13} className={`shrink-0 text-neutral-500 transition-transform duration-200 ${collapsed ? '' : 'rotate-90'}`} />
-        {collapsed ? <Folder size={15} className="shrink-0" /> : <FolderOpen size={15} className="shrink-0" />}
+        {React.createElement(folderIcon(folder, !collapsed), { size: 15, className: 'shrink-0', 'data-testid': `folder-icon-display-${folder.id}`, style: folder.color ? { color: folder.color } : undefined })}
         {editing ? (
           <input data-testid={`folder-rename-input-${folder.id}`} value={name} maxLength={60} autoFocus
             onChange={e => setName(e.target.value)} onBlur={finish} onClick={e => e.stopPropagation()}
@@ -61,7 +62,7 @@ const FolderSection = ({ folder, count, collapsed, onToggle, onRename, onEditSet
         )}
       </div>
       {!collapsed && (
-        <div data-testid={`folder-chats-${folder.id}`} className="pl-4 ml-2.5 border-l border-white/5">
+        <div data-testid={`folder-chats-${folder.id}`} className="pl-4 ml-2.5 border-l border-white/5" style={folder.color ? { borderColor: `${folder.color}59` } : undefined}>
           {children}
           {count === 0 && <div className="px-3 py-1.5 text-[11px] text-neutral-600 italic">Drag chats here</div>}
         </div>

@@ -262,6 +262,8 @@ A self-hosted, multi-model AI chat interface inspired by Open WebUI. The product
 
 - 2026-06: **New Chat in Folder** — hover folder → `folder-new-chat-{id}` (+) opens a fresh chat screen with `pending-folder-badge` ("New chat in <Folder>", X to cancel); chat is created inside the folder on first message (`POST /api/chats` accepts `folder_id`, 404 if not owned). Collapsed folder auto-expands. Self-tested: curl + Playwright.
 
+- 2026-06: **Folder Colours & Icons** — `color` (whitelist of 10 hex + default) and `icon` (16 keys) on folders, validated server-side (422 otherwise). Picked in Folder settings dialog (`folder-color-{hex}`, `folder-icon-{key}`); folder icon tinted + coloured left line beside its chats; also tinted in "Move to folder" submenu. Shared map in `components/folderStyles.js`. Self-tested: curl + Playwright.
+
 ### 10. Backlog
 - P1: Polish Admin Panel to match Open WebUI look (table layout, last-active column)
 - P2: Streaming responses, file upload, mobile layout, admin signup toggle, replace window.confirm/alert with in-app dialogs

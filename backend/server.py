@@ -631,9 +631,29 @@ async def move_chat_to_folder(chat_id: str, data: ChatFolderMove, user=Depends(g
 MAX_FOLDERS = 200
 
 
+FOLDER_COLORS = {"", "#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6", "#3b82f6", "#6366f1", "#a855f7", "#ec4899", "#94a3b8"}
+FOLDER_ICONS = {"", "folder", "briefcase", "code", "book", "rocket", "lightbulb", "heart", "star", "flask", "graduation", "music", "camera", "globe", "cart", "wrench", "palette"}
+
+
 class FolderPayload(BaseModel):
     name: str = Field(min_length=1, max_length=60)
     instructions: Optional[str] = Field(default=None, max_length=4000)
+    color: Optional[str] = None
+    icon: Optional[str] = None
+
+    @field_validator("color")
+    @classmethod
+    def check_color(cls, v):
+        if v is not None and v.lower() not in FOLDER_COLORS:
+            raise ValueError("Unsupported folder colour")
+        return v.lower() if v is not None else v
+
+    @field_validator("icon")
+    @classmethod
+    def check_icon(cls, v):
+        if v is not None and v not in FOLDER_ICONS:
+            raise ValueError("Unsupported folder icon")
+        return v
 
     @field_validator("name")
     @classmethod
@@ -662,7 +682,7 @@ async def create_folder(data: FolderPayload, user=Depends(get_current_user)):
     if await db.folders.count_documents({"user_id": user["id"]}) >= MAX_FOLDERS:
         raise HTTPException(status_code=400, detail=f"Folder limit of {MAX_FOLDERS} reached")
     await ensure_unique_folder_name(user["id"], data.name)
-    folder = {"id": str(uuid.uuid4()), "name": data.name, "instructions": (data.instructions or "").strip(), "user_id": user["id"], "created_at": now_iso()}
+    folder = {"id": str(uuid.uuid4()), "name": data.name, "instructions": (data.instructions or "").strip(), "color": data.color or "", "icon": data.icon or "", "user_id": user["id"], "created_at": now_iso()}
     await db.folders.insert_one({**folder, "_id": folder["id"]})
     return folder
 
@@ -673,6 +693,10 @@ async def rename_folder(folder_id: str, data: FolderPayload, user=Depends(get_cu
     update = {"name": data.name}
     if data.instructions is not None:
         update["instructions"] = data.instructions.strip()
+    if data.color is not None:
+        update["color"] = data.color
+    if data.icon is not None:
+        update["icon"] = data.icon
     result = await db.folders.update_one({"id": folder_id, "user_id": user["id"]}, {"$set": update})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Folder not found")

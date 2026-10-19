@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Pencil, Pin, PinOff, Download, Archive, Trash2, FolderInput, FolderMinus, Folder, ChevronRight, Check } from 'lucide-react';
+import { folderIcon } from '@/components/folderStyles';
+import { Pencil, Pin, PinOff, Download, Archive, Trash2, FolderInput, FolderMinus, ChevronRight, Check } from 'lucide-react';
 
 const item = "w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-neutral-300 text-sm";
 
@@ -37,7 +38,7 @@ const ChatRowMenu = ({ chat, folders, actions, onClose, onRename }) => {
             {folders.map(f => (
               <button key={f.id} data-testid={`chat-menu-folder-option-${f.id}`} onClick={() => run(() => actions.onMove(chat.id, f.id))}
                 className="w-full flex items-center gap-2 pl-6 pr-3 py-2 hover:bg-white/5 text-neutral-300 text-sm">
-                <Folder size={13} /> <span className="flex-1 text-left truncate">{f.name}</span>
+                {React.createElement(folderIcon(f, false), { size: 13, style: f.color ? { color: f.color } : undefined })} <span className="flex-1 text-left truncate">{f.name}</span>
                 {chat.folder_id === f.id && <Check size={13} className="text-green-400" />}
               </button>
             ))}
