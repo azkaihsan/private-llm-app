@@ -4,7 +4,7 @@ import {
   Plus, Search, MessageSquare, Pencil, Trash2,
   PanelLeft, Folder, Settings, LogOut, CircleUser,
   SquarePen, EllipsisVertical, X, Archive, ChevronDown,
-  Download, Upload, ArchiveRestore, MoreHorizontal, ArrowLeft, Shield
+  Download, Upload, ArchiveRestore, MoreHorizontal, ArrowLeft, Shield, Pin, PinOff
 } from 'lucide-react';
 import { useSettings } from '@/context/SettingsContext';
 import { useAuth } from '@/context/AuthContext';
@@ -14,7 +14,7 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const Sidebar = ({
   chats, activeChatId, onSelectChat, onNewChat, onDeleteChat,
   onRenameChat, isOpen, onToggle, onOpenSettings, onOpenUserManagement, onOpenPalette, archivedRequest,
-  onArchiveChat, onExportChat, onImportChat,
+  onArchiveChat, onExportChat, onImportChat, onPinChat, onUnpinChat,
   archivedChats, onUnarchiveChat, onDeleteArchivedChat, onDeleteAllArchived, onRefreshArchived
 }) => {
   const { user, isAdmin, logout } = useAuth();
@@ -60,7 +60,11 @@ const Sidebar = ({
   const filteredChats = chats.filter(c =>
     c.title.toLowerCase().includes(searchQuery.toLowerCase()) || contentMatches[c.id]
   );
-  const groupedChats = groupChatsByDate(filteredChats);
+  const pinnedChats = filteredChats.filter(c => c.pinned);
+  const groupedChats = [
+    ...(pinnedChats.length ? [['Pinned', pinnedChats]] : []),
+    ...groupChatsByDate(filteredChats.filter(c => !c.pinned)),
+  ];
 
   const handleStartRename = (e, chat) => {
     e.stopPropagation();
@@ -239,8 +243,8 @@ const Sidebar = ({
         <div className="pb-2">
           {groupedChats.map(([group, items]) => (
             <div key={group} className="mb-1">
-              <div className="px-2 py-2 text-[11px] font-medium text-neutral-500 uppercase tracking-wider">
-                {group}
+              <div data-testid={`chat-group-${group.toLowerCase().replace(/\s+/g, '-')}`} className="px-2 py-2 text-[11px] font-medium text-neutral-500 uppercase tracking-wider flex items-center gap-1.5">
+                {group === 'Pinned' && <Pin size={11} />}{group}
               </div>
               {items.map(chat => {
                 const isActive = activeChatId === chat.id;
@@ -251,6 +255,7 @@ const Sidebar = ({
                 return (
                 <div
                   key={chat.id}
+                  data-testid={`chat-row-${chat.id}`}
                   className={`group relative rounded-lg cursor-pointer mb-0.5 transition-colors ${
                     isActive ? 'bg-[#212121]' : 'hover:bg-white/5'
                   }`}
@@ -281,6 +286,17 @@ const Sidebar = ({
                       </div>
                       {showActions && (
                         <button
+                          data-testid={`chat-pin-toggle-${chat.id}`}
+                          title={chat.pinned ? 'Unpin' : 'Pin'}
+                          onClick={e => { e.stopPropagation(); chat.pinned ? onUnpinChat(chat.id) : onPinChat(chat.id); }}
+                          className="shrink-0 p-1.5 rounded-md text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
+                        >
+                          {chat.pinned ? <PinOff size={14} /> : <Pin size={14} />}
+                        </button>
+                      )}
+                      {showActions && (
+                        <button
+                          data-testid={`chat-menu-${chat.id}`}
                           onClick={e => { e.stopPropagation(); setContextMenuChat(isMenuOpen ? null : chat.id); }}
                           className="shrink-0 p-1.5 mr-1 rounded-md text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
                         >
@@ -313,6 +329,13 @@ const Sidebar = ({
                           className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-neutral-300 text-sm"
                         >
                           <Pencil size={14} /> Rename
+                        </button>
+                        <button
+                          data-testid={`chat-menu-pin-${chat.id}`}
+                          onClick={() => { chat.pinned ? onUnpinChat(chat.id) : onPinChat(chat.id); setContextMenuChat(null); }}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-neutral-300 text-sm"
+                        >
+                          {chat.pinned ? <><PinOff size={14} /> Unpin</> : <><Pin size={14} /> Pin</>}
                         </button>
                         <button
                           onClick={() => { onExportChat && onExportChat(chat.id); setContextMenuChat(null); }}

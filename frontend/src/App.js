@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from "react";
+import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import "@/App.css";
 import Sidebar from "@/components/Sidebar";
 import WelcomeScreen from "@/components/WelcomeScreen";
@@ -32,6 +32,9 @@ function AppContent() {
   const [activeMessages, setActiveMessages] = useState([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [userMgmtOpen, setUserMgmtOpen] = useState(false);
+  const activeChatRef = useRef(null);
+  const skipFetchRef = useRef(null);
+  useEffect(() => { activeChatRef.current = activeChatId; }, [activeChatId]);
   const [chatSearchOpen, setChatSearchOpen] = useState(false);
   const [chatSearchTerm, setChatSearchTerm] = useState("");
   const [chatSearchIndex, setChatSearchIndex] = useState(0);
@@ -129,15 +132,22 @@ function AppContent() {
   // Fetch messages when active chat changes
   useEffect(() => {
     if (!activeChatId) { setActiveMessages([]); return; }
+    if (skipFetchRef.current === activeChatId) { skipFetchRef.current = null; return; }
+    let cancelled = false;
     const fetchMessages = async () => {
       try {
         const res = await axios.get(`${API}/chats/${activeChatId}`);
-        setActiveMessages(res.data.messages || []);
+        if (!cancelled) setActiveMessages(res.data.messages || []);
       } catch (e) {
         console.error("Failed to fetch chat:", e);
+        if (!cancelled && e.response?.status === 404) {
+          setChats(prev => prev.filter(c => c.id !== activeChatId));
+          setActiveChatId(null);
+        }
       }
     };
     fetchMessages();
+    return () => { cancelled = true; };
   }, [activeChatId]);
 
   const createNewChat = useCallback(() => {
@@ -165,6 +175,15 @@ function AppContent() {
       setChats(prev => prev.map(c => c.id === chatId ? { ...c, title: newTitle } : c));
     } catch (e) { console.error("Failed to rename chat:", e); }
   }, []);
+
+  const setPinned = useCallback(async (chatId, pinned) => {
+    try {
+      await axios.put(`${API}/chats/${chatId}/${pinned ? 'pin' : 'unpin'}`);
+      setChats(prev => prev.map(c => c.id === chatId ? { ...c, pinned } : c));
+    } catch (e) { console.error("Failed to update pin:", e); }
+  }, []);
+  const pinChat = useCallback((id) => setPinned(id, true), [setPinned]);
+  const unpinChat = useCallback((id) => setPinned(id, false), [setPinned]);
 
   // ===== Archive, Export, Import =====
   const [archivedChats, setArchivedChats] = useState([]);
@@ -247,6 +266,7 @@ function AppContent() {
         const res = await axios.post(`${API}/chats`, { title, model: modelId });
         const newChat = { ...res.data, createdAt: new Date(res.data.created_at).getTime() };
         setChats(prev => [newChat, ...prev]);
+        skipFetchRef.current = newChat.id;
         setActiveChatId(newChat.id);
 
         // Optimistic: show user message immediately
@@ -256,15 +276,14 @@ function AppContent() {
 
         // Send message to backend
         const msgRes = await axios.post(`${API}/chats/${newChat.id}/messages`, { content });
-        setActiveMessages([msgRes.data.user_message, msgRes.data.assistant_message]);
-
-        // Update chat title from backend
-        const updatedChat = await axios.get(`${API}/chats/${newChat.id}`);
-        setChats(prev => prev.map(c => c.id === newChat.id ? { ...c, title: updatedChat.data.title } : c));
-        setIsTyping(false);
+        if (activeChatRef.current === newChat.id) {
+          setActiveMessages([msgRes.data.user_message, msgRes.data.assistant_message]);
+          setIsTyping(false);
+        }
       } catch (e) {
         console.error("Failed to create chat:", e);
         setIsTyping(false);
+        setActiveMessages(prev => [...prev, { id: `err-${Date.now()}`, role: "assistant", content: "Failed to send message. Please try again." }]);
       }
     } else {
       // Add message to existing chat
@@ -274,6 +293,7 @@ function AppContent() {
 
       try {
         const msgRes = await axios.post(`${API}/chats/${activeChatId}/messages`, { content });
+        if (activeChatRef.current !== activeChatId) return;
         setActiveMessages(prev => {
           const filtered = prev.filter(m => m.id !== tempUserMsg.id);
           return [...filtered, msgRes.data.user_message, msgRes.data.assistant_message];
@@ -281,7 +301,9 @@ function AppContent() {
         setIsTyping(false);
       } catch (e) {
         console.error("Failed to send message:", e);
+        if (activeChatRef.current !== activeChatId) return;
         setIsTyping(false);
+        setActiveMessages(prev => [...prev, { id: `err-${Date.now()}`, role: "assistant", content: "Failed to send message. Please try again." }]);
       }
     }
   }, [activeChatId, selectedModel, isTyping]);
@@ -310,6 +332,8 @@ function AppContent() {
         onOpenPalette={() => setPaletteOpen(true)}
         archivedRequest={archivedRequest}
         onArchiveChat={archiveChat}
+        onPinChat={pinChat}
+        onUnpinChat={unpinChat}
         onExportChat={exportChat}
         onImportChat={importChat}
         archivedChats={archivedChats}

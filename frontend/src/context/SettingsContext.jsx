@@ -72,6 +72,13 @@ const themePresets = {
   },
 };
 
+const LOCAL_THEME_KEY = 'openwebui_local_theme';
+const THEME_KEYS = ['theme', 'mainBg', 'sidebarBg', 'inputBg', 'accentColor', 'userBubbleBg', 'fontSize'];
+
+const readLocalTheme = () => {
+  try { return JSON.parse(localStorage.getItem(LOCAL_THEME_KEY)) || {}; } catch { return {}; }
+};
+
 const SettingsContext = createContext();
 
 export const useSettings = () => useContext(SettingsContext);
@@ -80,7 +87,7 @@ export const SettingsProvider = ({ children }) => {
   const [settings, setSettings] = useState(() => {
     try {
       const saved = localStorage.getItem('openwebui_settings');
-      return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings;
+      return { ...defaultSettings, ...(saved ? JSON.parse(saved) : {}), ...readLocalTheme() };
     } catch {
       return defaultSettings;
     }
@@ -95,8 +102,8 @@ export const SettingsProvider = ({ children }) => {
         const res = await axios.get(`${API}/settings`);
         if (res.data && Object.keys(res.data).length > 0) {
           const merged = { ...defaultSettings, ...res.data };
-          setSettings(merged);
           localStorage.setItem('openwebui_settings', JSON.stringify(merged));
+          setSettings({ ...merged, ...readLocalTheme() });
         }
       } catch (e) {
         // Backend settings not available, use localStorage
@@ -127,10 +134,17 @@ export const SettingsProvider = ({ children }) => {
     root.style.setProperty('--code-bg', isLight ? '#f0f0f0' : '#1e1e1e');
   }, [settings]);
 
-  const updateSettings = useCallback(async (newSettings) => {
+  // Admins persist globally; other users keep a device-local theme override.
+  const updateSettings = useCallback(async ({ remote = true } = {}, newSettings) => {
     const merged = { ...settings, ...newSettings };
     setSettings(merged);
+    if (!remote) {
+      const local = Object.fromEntries(THEME_KEYS.filter(k => k in merged).map(k => [k, merged[k]]));
+      localStorage.setItem(LOCAL_THEME_KEY, JSON.stringify(local));
+      return;
+    }
     localStorage.setItem('openwebui_settings', JSON.stringify(merged));
+    localStorage.removeItem(LOCAL_THEME_KEY);
     try {
       await axios.put(`${API}/settings`, merged);
     } catch (e) {
@@ -138,7 +152,15 @@ export const SettingsProvider = ({ children }) => {
     }
   }, [settings]);
 
-  const resetSettings = useCallback(async () => {
+  const resetSettings = useCallback(async ({ remote = true } = {}) => {
+    localStorage.removeItem(LOCAL_THEME_KEY);
+    if (!remote) {
+      try {
+        const saved = JSON.parse(localStorage.getItem('openwebui_settings')) || {};
+        setSettings({ ...defaultSettings, ...saved });
+      } catch { setSettings(defaultSettings); }
+      return;
+    }
     setSettings(defaultSettings);
     localStorage.setItem('openwebui_settings', JSON.stringify(defaultSettings));
     try {

@@ -35,8 +35,9 @@ const PROVIDER_INFO = {
 const SettingsModal = ({ open, onClose, onModelsChanged }) => {
   const { settings, updateSettings, resetSettings, themePresets } = useSettings();
   const { isAdmin } = useAuth();
-  const visibleTabs = tabs.filter(t => isAdmin || !['connections', 'models'].includes(t.id));
-  const [activeTab, setActiveTab] = useState(isAdmin ? 'connections' : 'general');
+  const ADMIN_TABS = ['connections', 'models', 'general', 'system'];
+  const visibleTabs = tabs.filter(t => isAdmin || !ADMIN_TABS.includes(t.id));
+  const [activeTab, setActiveTab] = useState(isAdmin ? 'connections' : 'theme');
   const [localSettings, setLocalSettings] = useState(settings);
   const fileInputRef = useRef(null);
 
@@ -54,7 +55,7 @@ const SettingsModal = ({ open, onClose, onModelsChanged }) => {
     if (!open) return;
     setLocalSettings(settings);
     if (isAdmin) { loadConnections(); loadModels(); }
-    else setActiveTab(t => ['connections', 'models'].includes(t) ? 'general' : t);
+    else setActiveTab(t => ADMIN_TABS.includes(t) ? 'theme' : t);
   }, [open, settings, isAdmin]);
 
   const loadConnections = async () => {
@@ -147,8 +148,8 @@ const SettingsModal = ({ open, onClose, onModelsChanged }) => {
   };
 
   const handleSave = async () => {
-    updateSettings(localSettings);
-    if (connections) {
+    updateSettings({ remote: isAdmin }, localSettings);
+    if (isAdmin && connections) {
       try {
         await axios.put(`${API}/connections`, connections);
         onModelsChanged && onModelsChanged();
@@ -158,7 +159,7 @@ const SettingsModal = ({ open, onClose, onModelsChanged }) => {
   };
 
   const handleReset = () => {
-    resetSettings();
+    resetSettings({ remote: isAdmin });
     setLocalSettings({ ...settings });
     onClose();
   };
@@ -615,6 +616,9 @@ const SettingsModal = ({ open, onClose, onModelsChanged }) => {
               )}
 
               {/* ===== THEME TAB ===== */}
+              {activeTab === 'theme' && !isAdmin && (
+                <p data-testid="theme-local-note" className="text-xs mb-4" style={{ color: mutedColor }}>Theme preferences are saved on this device only. App-wide appearance is managed by an admin.</p>
+              )}
               {activeTab === 'theme' && (
                 <>
                   <div>
