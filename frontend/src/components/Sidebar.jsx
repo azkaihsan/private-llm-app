@@ -10,6 +10,7 @@ import { useSettings } from '@/context/SettingsContext';
 import { useAuth } from '@/context/AuthContext';
 import ChatRow from '@/components/ChatRow';
 import FolderSection, { useDropZone } from '@/components/FolderSection';
+import FolderSettingsDialog from '@/components/FolderSettingsDialog';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -18,7 +19,7 @@ const Sidebar = ({
   onRenameChat, isOpen, onToggle, onOpenSettings, onOpenUserManagement, onOpenPalette, archivedRequest,
   onArchiveChat, onExportChat, onImportChat, onPinChat, onUnpinChat,
   archivedChats, onUnarchiveChat, onDeleteArchivedChat, onDeleteAllArchived, onRefreshArchived,
-  folders, onCreateFolder, onRenameFolder, onDeleteFolder, onMoveChat
+  folders, onCreateFolder, onRenameFolder, onUpdateFolder, onDeleteFolder, onMoveChat
 }) => {
   const { user, isAdmin, logout } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
@@ -27,6 +28,7 @@ const Sidebar = ({
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [draggingChatId, setDraggingChatId] = useState(null);
+  const [settingsFolderId, setSettingsFolderId] = useState(null);
   const collapseKey = `openwebui_collapsed_folders_${user?.id}`;
   const [collapsedFolders, setCollapsedFolders] = useState(() => {
     try { return JSON.parse(localStorage.getItem(collapseKey)) || []; } catch { return []; }
@@ -293,7 +295,7 @@ const Sidebar = ({
               return (
                 <FolderSection key={f.id} folder={f} count={items.length}
                   collapsed={!searching && collapsedFolders.includes(f.id)} onToggle={toggleFolder}
-                  onRename={onRenameFolder} onDelete={onDeleteFolder} onDropChat={id => onMoveChat(id, f.id)}>
+                  onRename={onRenameFolder} onEditSettings={setSettingsFolderId} onDelete={onDeleteFolder} onDropChat={id => onMoveChat(id, f.id)}>
                   {items.map(renderChat)}
                 </FolderSection>
               );
@@ -315,6 +317,9 @@ const Sidebar = ({
           )}
         </div>
       </div>
+
+      <FolderSettingsDialog folder={folders.find(f => f.id === settingsFolderId)} open={!!settingsFolderId && folders.some(f => f.id === settingsFolderId)}
+        onClose={() => setSettingsFolderId(null)} onSave={onUpdateFolder} />
 
       {/* Hidden file input for import */}
       <input

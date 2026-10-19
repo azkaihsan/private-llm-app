@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronRight, Folder, FolderOpen, Pencil, Trash2 } from 'lucide-react';
+import { ChevronRight, Folder, FolderOpen, Pencil, Trash2, ScrollText, SlidersHorizontal } from 'lucide-react';
 
 export const useDropZone = (onDropChat) => {
   const [over, setOver] = useState(false);
@@ -13,7 +13,7 @@ export const useDropZone = (onDropChat) => {
   };
 };
 
-const FolderSection = ({ folder, count, collapsed, onToggle, onRename, onDelete, onDropChat, children }) => {
+const FolderSection = ({ folder, count, collapsed, onToggle, onRename, onEditSettings, onDelete, onDropChat, children }) => {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(folder.name);
   const drop = useDropZone(onDropChat);
@@ -40,9 +40,16 @@ const FolderSection = ({ folder, count, collapsed, onToggle, onRename, onDelete,
         ) : (
           <span data-testid={`folder-name-${folder.id}`} className="flex-1 min-w-0 text-sm truncate">{folder.name}</span>
         )}
+        {!editing && folder.instructions && (
+          <span data-testid={`folder-instructions-indicator-${folder.id}`} title="Has folder instructions" className="shrink-0 text-amber-400/80 group-hover:hidden">
+            <ScrollText size={12} />
+          </span>
+        )}
         {!editing && <span data-testid={`folder-count-${folder.id}`} className="text-[11px] text-neutral-500 group-hover:hidden">{count}</span>}
         {!editing && (
           <div className="hidden group-hover:flex items-center gap-0.5">
+            <button data-testid={`folder-edit-instructions-${folder.id}`} title="Edit instructions" onClick={e => { e.stopPropagation(); onEditSettings(folder.id); }}
+              className="p-1 rounded text-neutral-400 hover:text-white hover:bg-white/10"><SlidersHorizontal size={12} /></button>
             <button data-testid={`folder-rename-${folder.id}`} title="Rename folder" onClick={e => { e.stopPropagation(); setName(folder.name); setEditing(true); }}
               className="p-1 rounded text-neutral-400 hover:text-white hover:bg-white/10"><Pencil size={12} /></button>
             <button data-testid={`folder-delete-${folder.id}`} title="Delete folder"

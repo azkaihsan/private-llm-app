@@ -630,6 +630,7 @@ MAX_FOLDERS = 200
 
 class FolderPayload(BaseModel):
     name: str = Field(min_length=1, max_length=60)
+    instructions: Optional[str] = Field(default=None, max_length=4000)
 
     @field_validator("name")
     @classmethod
@@ -658,7 +659,7 @@ async def create_folder(data: FolderPayload, user=Depends(get_current_user)):
     if await db.folders.count_documents({"user_id": user["id"]}) >= MAX_FOLDERS:
         raise HTTPException(status_code=400, detail=f"Folder limit of {MAX_FOLDERS} reached")
     await ensure_unique_folder_name(user["id"], data.name)
-    folder = {"id": str(uuid.uuid4()), "name": data.name, "user_id": user["id"], "created_at": now_iso()}
+    folder = {"id": str(uuid.uuid4()), "name": data.name, "instructions": (data.instructions or "").strip(), "user_id": user["id"], "created_at": now_iso()}
     await db.folders.insert_one({**folder, "_id": folder["id"]})
     return folder
 
@@ -666,7 +667,10 @@ async def create_folder(data: FolderPayload, user=Depends(get_current_user)):
 @api_router.put("/folders/{folder_id}")
 async def rename_folder(folder_id: str, data: FolderPayload, user=Depends(get_current_user)):
     await ensure_unique_folder_name(user["id"], data.name, folder_id)
-    result = await db.folders.update_one({"id": folder_id, "user_id": user["id"]}, {"$set": {"name": data.name}})
+    update = {"name": data.name}
+    if data.instructions is not None:
+        update["instructions"] = data.instructions.strip()
+    result = await db.folders.update_one({"id": folder_id, "user_id": user["id"]}, {"$set": update})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Folder not found")
     return {"status": "ok"}
@@ -716,6 +720,10 @@ async def send_message(chat_id: str, data: MessageCreate, user=Depends(get_curre
     try:
         app_settings = await db.app_settings.find_one({"_id": "global"}, {"_id": 0}) or {}
         system_prompt = app_settings.get("systemPrompt") or DEFAULT_SYSTEM_PROMPT
+        if chat.get("folder_id"):
+            folder = await db.folders.find_one({"id": chat["folder_id"], "user_id": user["id"]}, {"_id": 0, "instructions": 1})
+            if folder and folder.get("instructions"):
+                system_prompt = f"{system_prompt}\n\nProject instructions:\n{folder['instructions']}"
         messages_for_llm = [{"role": "system", "content": system_prompt}] + [{"role": h["role"], "content": h["content"]} for h in history]
 
         if provider in EMERGENT_PROVIDERS:

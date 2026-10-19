@@ -29,6 +29,16 @@ export const useFolders = (userId, setChats) => {
     } catch (e) { toast.error(errMsg(e, 'Failed to rename folder')); }
   }, []);
 
+  const updateFolder = useCallback(async (id, data) => {
+    try {
+      await axios.put(`${API}/folders/${id}`, data);
+      const name = data.name.split(/\s+/).filter(Boolean).join(' ');
+      setFolders(prev => prev.map(f => f.id === id ? { ...f, name, instructions: data.instructions } : f));
+      toast.success('Folder saved');
+      return true;
+    } catch (e) { toast.error(errMsg(e, 'Failed to save folder')); return false; }
+  }, []);
+
   const deleteFolder = useCallback(async (id) => {
     try {
       await axios.delete(`${API}/folders/${id}`);
@@ -53,5 +63,5 @@ export const useFolders = (userId, setChats) => {
     }
   }, [setChats]);
 
-  return { folders, createFolder, renameFolder, deleteFolder, moveChat };
+  return { folders, createFolder, renameFolder, updateFolder, deleteFolder, moveChat };
 };
