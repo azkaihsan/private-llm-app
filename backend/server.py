@@ -8,6 +8,7 @@ from fastapi import FastAPI, APIRouter, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import UpdateOne
 from contextlib import asynccontextmanager
 import os
 import re
@@ -672,9 +673,28 @@ async def ensure_unique_folder_name(user_id: str, name: str, exclude_id: Optiona
         raise HTTPException(status_code=409, detail="A folder with this name already exists")
 
 
+async def next_folder_position(user_id: str) -> int:
+    last = await db.folders.find_one({"user_id": user_id, "position": {"$type": "number"}}, {"position": 1}, sort=[("position", -1)])
+    return (last["position"] + 1) if last else await db.folders.count_documents({"user_id": user_id})
+
+
+class FolderOrder(BaseModel):
+    ids: List[str] = Field(max_length=MAX_FOLDERS)
+
+
+@api_router.put("/folders/order")
+async def reorder_folders(data: FolderOrder, user=Depends(get_current_user)):
+    owned = {f["id"] for f in await db.folders.find({"user_id": user["id"]}, {"id": 1}).to_list(MAX_FOLDERS)}
+    if len(data.ids) != len(set(data.ids)) or set(data.ids) != owned:
+        raise HTTPException(status_code=400, detail="Order must list each of your folders exactly once")
+    if data.ids:
+        await db.folders.bulk_write([UpdateOne({"id": fid, "user_id": user["id"]}, {"$set": {"position": i}}) for i, fid in enumerate(data.ids)])
+    return {"status": "ok"}
+
+
 @api_router.get("/folders")
 async def list_folders(user=Depends(get_current_user)):
-    return await db.folders.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", 1).to_list(MAX_FOLDERS)
+    return await db.folders.find({"user_id": user["id"]}, {"_id": 0}).sort([("position", 1), ("created_at", 1)]).to_list(MAX_FOLDERS)
 
 
 @api_router.post("/folders")
@@ -682,7 +702,7 @@ async def create_folder(data: FolderPayload, user=Depends(get_current_user)):
     if await db.folders.count_documents({"user_id": user["id"]}) >= MAX_FOLDERS:
         raise HTTPException(status_code=400, detail=f"Folder limit of {MAX_FOLDERS} reached")
     await ensure_unique_folder_name(user["id"], data.name)
-    folder = {"id": str(uuid.uuid4()), "name": data.name, "instructions": (data.instructions or "").strip(), "color": data.color or "", "icon": data.icon or "", "user_id": user["id"], "created_at": now_iso()}
+    folder = {"id": str(uuid.uuid4()), "name": data.name, "instructions": (data.instructions or "").strip(), "color": data.color or "", "icon": data.icon or "", "position": await next_folder_position(user["id"]), "user_id": user["id"], "created_at": now_iso()}
     await db.folders.insert_one({**folder, "_id": folder["id"]})
     return folder
 

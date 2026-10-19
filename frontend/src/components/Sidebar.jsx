@@ -19,7 +19,7 @@ const Sidebar = ({
   onRenameChat, isOpen, onToggle, onOpenSettings, onOpenUserManagement, onOpenPalette, archivedRequest,
   onArchiveChat, onExportChat, onImportChat, onPinChat, onUnpinChat,
   archivedChats, onUnarchiveChat, onDeleteArchivedChat, onDeleteAllArchived, onRefreshArchived,
-  folders, onCreateFolder, onRenameFolder, onUpdateFolder, onDeleteFolder, onMoveChat, onNewChatInFolder, pendingFolderId
+  folders, onCreateFolder, onRenameFolder, onUpdateFolder, onReorderFolder, onDeleteFolder, onMoveChat, onNewChatInFolder, pendingFolderId
 }) => {
   const { user, isAdmin, logout } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
@@ -29,6 +29,7 @@ const Sidebar = ({
   const [newFolderName, setNewFolderName] = useState('');
   const [draggingChatId, setDraggingChatId] = useState(null);
   const [settingsFolderId, setSettingsFolderId] = useState(null);
+  const [draggingFolderId, setDraggingFolderId] = useState(null);
   const collapseKey = `openwebui_collapsed_folders_${user?.id}`;
   const [collapsedFolders, setCollapsedFolders] = useState(() => {
     try { return JSON.parse(localStorage.getItem(collapseKey)) || []; } catch { return []; }
@@ -301,7 +302,9 @@ const Sidebar = ({
                 <FolderSection key={f.id} folder={f} count={items.length}
                   collapsed={!searching && collapsedFolders.includes(f.id)} onToggle={toggleFolder}
                   onRename={onRenameFolder} onEditSettings={setSettingsFolderId} onDelete={onDeleteFolder}
-                  onNewChat={newChatInFolder} isPending={pendingFolderId === f.id} onDropChat={id => onMoveChat(id, f.id)}>
+                  onNewChat={newChatInFolder} isPending={pendingFolderId === f.id}
+                  reorderable={!searching} draggingFolderId={draggingFolderId} onFolderDrag={setDraggingFolderId}
+                  onReorder={onReorderFolder} onDropChat={id => onMoveChat(id, f.id)}>
                   {items.map(renderChat)}
                 </FolderSection>
               );

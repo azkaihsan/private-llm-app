@@ -14,10 +14,28 @@ export const useDropZone = (onDropChat) => {
   };
 };
 
-const FolderSection = ({ folder, count, collapsed, onToggle, onRename, onEditSettings, onDelete, onDropChat, onNewChat, isPending, children }) => {
+const FolderSection = ({ folder, count, collapsed, onToggle, onRename, onEditSettings, onDelete, onDropChat, onNewChat, isPending, reorderable, draggingFolderId, onFolderDrag, onReorder, children }) => {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(folder.name);
   const drop = useDropZone(onDropChat);
+  const [dropPlace, setDropPlace] = useState(null);
+  const folderDragOver = draggingFolderId && draggingFolderId !== folder.id;
+
+  const handleDragOver = (e) => {
+    if (!folderDragOver || !e.dataTransfer.types.includes('text/folder-id')) return drop.props.onDragOver(e);
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const r = e.currentTarget.getBoundingClientRect();
+    setDropPlace(e.clientY < r.top + Math.min(r.height, 36) / 2 ? 'before' : 'after');
+  };
+  const handleDrop = (e) => {
+    if (!e.dataTransfer.types.includes('text/folder-id')) return drop.props.onDrop(e);
+    e.preventDefault();
+    const id = e.dataTransfer.getData('text/folder-id');
+    if (id && id !== folder.id && dropPlace) onReorder(id, folder.id, dropPlace);
+    setDropPlace(null);
+  };
+  const handleDragLeave = (e) => { drop.props.onDragLeave(e); if (!e.currentTarget.contains(e.relatedTarget)) setDropPlace(null); };
 
   const finish = () => {
     const n = name.trim();
@@ -27,9 +45,16 @@ const FolderSection = ({ folder, count, collapsed, onToggle, onRename, onEditSet
   };
 
   return (
-    <div data-testid={`folder-${folder.id}`} {...drop.props}
-      className={`rounded-lg mb-0.5 transition-colors ${drop.over ? 'bg-white/[0.07] ring-1 ring-white/20' : ''}`}>
+    <div data-testid={`folder-${folder.id}`} onDragOver={handleDragOver} onDrop={handleDrop} onDragLeave={handleDragLeave}
+      className={`relative rounded-lg mb-0.5 transition-[background-color,opacity] ${drop.over ? 'bg-white/[0.07] ring-1 ring-white/20' : ''} ${draggingFolderId === folder.id ? 'opacity-40' : ''}`}>
+      {folderDragOver && dropPlace && (
+        <div data-testid={`folder-drop-indicator-${dropPlace}-${folder.id}`}
+          className={`absolute left-1 right-1 h-0.5 rounded-full bg-sky-400 pointer-events-none z-10 ${dropPlace === 'before' ? '-top-px' : '-bottom-px'}`} />
+      )}
       <div data-testid={`folder-header-${folder.id}`} onClick={() => !editing && onToggle(folder.id)}
+        draggable={reorderable && !editing}
+        onDragStart={e => { e.dataTransfer.setData('text/folder-id', folder.id); e.dataTransfer.effectAllowed = 'move'; onFolderDrag(folder.id); }}
+        onDragEnd={() => onFolderDrag(null)}
         className={`group flex items-center gap-1.5 px-2 py-2 rounded-lg cursor-pointer hover:bg-white/5 text-neutral-300 ${isPending ? 'bg-white/[0.06]' : ''}`}>
         <ChevronRight size={13} className={`shrink-0 text-neutral-500 transition-transform duration-200 ${collapsed ? '' : 'rotate-90'}`} />
         {React.createElement(folderIcon(folder, !collapsed), { size: 15, className: 'shrink-0', 'data-testid': `folder-icon-display-${folder.id}`, style: folder.color ? { color: folder.color } : undefined })}

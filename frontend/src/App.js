@@ -358,6 +358,7 @@ function AppContent() {
         onCreateFolder={folderApi.createFolder}
         onRenameFolder={folderApi.renameFolder}
         onUpdateFolder={folderApi.updateFolder}
+        onReorderFolder={folderApi.reorderFolder}
         onDeleteFolder={folderApi.deleteFolder}
         onMoveChat={folderApi.moveChat}
         onNewChatInFolder={startChatInFolder}

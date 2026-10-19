@@ -39,6 +39,27 @@ export const useFolders = (userId, setChats) => {
     } catch (e) { toast.error(errMsg(e, 'Failed to save folder')); return false; }
   }, []);
 
+  const reorderFolder = useCallback(async (dragId, targetId, place) => {
+    let previous, next;
+    setFolders(prev => {
+      previous = prev;
+      const moving = prev.find(f => f.id === dragId);
+      const rest = prev.filter(f => f.id !== dragId);
+      const idx = rest.findIndex(f => f.id === targetId);
+      if (!moving || idx < 0) return prev;
+      rest.splice(place === 'after' ? idx + 1 : idx, 0, moving);
+      next = rest;
+      return rest;
+    });
+    if (!next) return;
+    try {
+      await axios.put(`${API}/folders/order`, { ids: next.map(f => f.id) });
+    } catch (e) {
+      setFolders(previous);
+      toast.error(errMsg(e, 'Failed to reorder folders'));
+    }
+  }, []);
+
   const deleteFolder = useCallback(async (id) => {
     try {
       await axios.delete(`${API}/folders/${id}`);
@@ -63,5 +84,5 @@ export const useFolders = (userId, setChats) => {
     }
   }, [setChats]);
 
-  return { folders, createFolder, renameFolder, updateFolder, deleteFolder, moveChat };
+  return { folders, createFolder, renameFolder, updateFolder, reorderFolder, deleteFolder, moveChat };
 };
